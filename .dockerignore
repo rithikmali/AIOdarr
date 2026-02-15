@@ -1,0 +1,43 @@
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg
+*.egg-info
+dist
+build
+.pytest_cache
+.coverage
+htmlcov
+
+# Virtual environments
+.venv
+venv
+env
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# Project specific
+.env
+*.log
+tests/
+.dockerignore
+Dockerfile
+CHANGELOG.md
+LICENSE
+run.sh
+res.json
+.python-version
+uv.lock
+.github/

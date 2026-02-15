@@ -21,36 +21,81 @@ Instead of managing Real-Debrid API calls directly, this service leverages AIOSt
 
 ## Prerequisites
 
-- **Python 3.13** or higher
-- **uv** - Fast Python package installer
 - **Radarr** - Media management (v3+)
 - **AIOStreams** - Configured with Real-Debrid (via Stremio manifest URL)
 - **Real-Debrid** - Debrid service account (configured in AIOStreams)
 - **Zurg + rclone** - Mounted Real-Debrid filesystem
+- **Docker** (recommended) or **Python 3.13+** with **uv**
 
 ## Installation
 
-### 1. Install uv (if not already installed)
+### Option 1: Docker (Recommended)
 
+#### Using Docker Compose
+
+1. Clone the repository:
 ```bash
-curl -LsSf https://astral.sh/uv/install.sh | sh
-```
-
-### 2. Clone/Download
-
-```bash
-git clone <repository-url>
+git clone https://github.com/yourusername/aiodarr.git
 cd aiodarr
 ```
 
-### 3. Configure Environment
-
+2. Create `.env` file:
 ```bash
 cp .env.example .env
 nano .env  # Edit with your settings
 ```
 
-Required configuration:
+3. Start the service:
+```bash
+docker-compose up -d
+```
+
+#### Using Docker CLI
+
+```bash
+docker run -d \
+  --name aiodarr \
+  --restart unless-stopped \
+  -e RADARR_URL=http://radarr:7878 \
+  -e RADARR_API_KEY=your_radarr_api_key \
+  -e AIOSTREAMS_URL=https://aiostreams.elfhosted.com/your_config/ \
+  ghcr.io/yourusername/aiodarr:latest
+```
+
+#### Using Pre-built Image
+
+```bash
+docker pull ghcr.io/yourusername/aiodarr:latest
+```
+
+### Option 2: Python/uv
+
+1. Install uv:
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+2. Clone and configure:
+```bash
+git clone https://github.com/yourusername/aiodarr.git
+cd aiodarr
+cp .env.example .env
+nano .env  # Edit with your settings
+```
+
+3. Install dependencies:
+```bash
+uv sync
+```
+
+Or use the run script:
+```bash
+./run.sh
+```
+
+## Configuration
+
+Required environment variables:
 ```env
 RADARR_URL=http://localhost:7878
 RADARR_API_KEY=your_radarr_api_key
@@ -66,20 +111,29 @@ AIOSTREAMS_URL=https://aiostreams.elfhosted.com/eyJkZWJyaWRBcGlLZXkiOiJ.../
   - Use this: `https://aiostreams.elfhosted.com/eyJ.../`
   - Make sure it ends with a `/`
 
-### 4. Install Dependencies
-
-```bash
-uv sync
-```
-
-Or use the provided run script:
-```bash
-./run.sh
-```
-
 ## Usage
 
-### Running the Service
+### Docker
+
+**View logs:**
+```bash
+docker-compose logs -f
+# or
+docker logs -f aiodarr
+```
+
+**Stop service:**
+```bash
+docker-compose down
+```
+
+**Update to latest version:**
+```bash
+docker-compose pull
+docker-compose up -d
+```
+
+### Python/uv
 
 **Option 1: Using run script (recommended)**
 ```bash
