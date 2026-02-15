@@ -1,23 +1,31 @@
 # AIODarr - AIOStreams-Radarr Bridge
 
-Automatically adds wanted movies from Radarr to Real-Debrid using AIOStreams for torrent discovery.
+Automatically adds wanted movies from Radarr to Real-Debrid using AIOStreams.
 
 ## Overview
 
 This service bridges the gap between Radarr and AIOStreams, automatically:
 1. Monitors Radarr for wanted movies
 2. Searches AIOStreams for cached Real-Debrid torrents
-3. Adds the best quality match to Real-Debrid
-4. Lets Zurg create symlinks automatically
-5. Radarr imports the movie when it detects the file
+3. Triggers AIOStreams to add the torrent to Real-Debrid
+4. Unmonitors the movie in Radarr
+5. Zurg creates symlinks automatically
+6. Radarr imports the movie when it detects the file
+
+## How It Works
+
+Instead of managing Real-Debrid API calls directly, this service leverages AIOStreams' existing integration:
+- Makes a HEAD request to the AIOStreams playback URL
+- AIOStreams handles adding the torrent to your Real-Debrid account
+- No need for separate Real-Debrid API keys (already encoded in your AIOStreams manifest)
 
 ## Prerequisites
 
 - **Python 3.13** or higher
 - **uv** - Fast Python package installer
 - **Radarr** - Media management (v3+)
-- **AIOStreams** - Configured with Real-Debrid API key
-- **Real-Debrid** - Debrid service account
+- **AIOStreams** - Configured with Real-Debrid (via Stremio manifest URL)
+- **Real-Debrid** - Debrid service account (configured in AIOStreams)
 - **Zurg + rclone** - Mounted Real-Debrid filesystem
 
 ## Installation
@@ -47,14 +55,16 @@ Required configuration:
 RADARR_URL=http://localhost:7878
 RADARR_API_KEY=your_radarr_api_key
 
-AIOSTREAMS_URL=http://localhost:8080
-
-REALDEBRID_API_KEY=your_realdebrid_api_key
+# Your Stremio manifest URL with "/manifest.json" removed
+AIOSTREAMS_URL=https://aiostreams.elfhosted.com/eyJkZWJyaWRBcGlLZXkiOiJ.../
 ```
 
-**Getting API Keys:**
-- **Radarr**: Settings → General → Security → API Key
-- **Real-Debrid**: https://real-debrid.com/apitoken
+**Getting Configuration Values:**
+- **Radarr API Key**: Settings → General → Security → API Key
+- **AIOStreams URL**: Take your Stremio manifest URL and remove `/manifest.json` from the end
+  - Example Stremio URL: `https://aiostreams.elfhosted.com/eyJ.../manifest.json`
+  - Use this: `https://aiostreams.elfhosted.com/eyJ.../`
+  - Make sure it ends with a `/`
 
 ### 4. Install Dependencies
 
@@ -134,12 +144,23 @@ sudo journalctl -u aiodarr -f
        │
        ↓
 ┌─────────────┐
-│ AIOStreams  │ ← Returns cached RD streams
+│ AIOStreams  │ ← Returns cached streams with playback URLs
 └──────┬──────┘
        │
        ↓
 ┌─────────────┐
-│Real-Debrid  │ ← Adds torrent to account
+│   Service   │ ← Makes HEAD request to trigger download
+│   Triggers  │
+└──────┬──────┘
+       │
+       ↓
+┌─────────────┐
+│ AIOStreams  │ ← Adds torrent to Real-Debrid automatically
+└──────┬──────┘
+       │
+       ↓
+┌─────────────┐
+│   Service   │ ← Unmonitors movie in Radarr
 └──────┬──────┘
        │
        ↓
@@ -165,14 +186,20 @@ sudo journalctl -u aiodarr -f
 ## Troubleshooting
 
 ### No streams found
-- Verify AIOStreams is configured with Real-Debrid API key
-- Check AIOStreams is working: `curl http://your-aiostreams/stream/movie/tt0133093.json`
-- Ensure movie is available on Real-Debrid (check manually in Stremio)
+- Verify your AIOStreams URL includes the encoded config (not just the base URL)
+- Test manually: `curl "${AIOSTREAMS_URL}/stream/movie/tt0133093.json"`
+- Should return JSON with cached streams marked with ⚡
+
+### Movies not being added to Real-Debrid
+- Check AIOStreams logs for errors
+- Verify your Real-Debrid account is properly configured in AIOStreams
+- Make sure the stream has a `url` field in the AIOStreams response
 
 ### Movies not importing to Radarr
 - Verify Zurg + rclone mount is working
 - Check Radarr's root folder path matches Zurg mount
 - Look at Radarr logs for import errors
+- Movies are unmonitored after processing, so they won't re-download
 
 ### Service keeps retrying same movie
 - Movie might not be cached on Real-Debrid
@@ -184,12 +211,12 @@ sudo journalctl -u aiodarr -f
 ### Running Tests
 
 ```bash
-uv run pytest tests/ -v
+uv run python -m pytest tests/ -v
 ```
 
 With coverage:
 ```bash
-uv run pytest tests/ -v --cov=src --cov-report=term-missing
+uv run python -m pytest tests/ -v --cov=src --cov-report=term-missing
 ```
 
 ### Project Structure
@@ -202,8 +229,7 @@ src/
 ├── storage.py           # Track processed movies
 └── clients/
     ├── radarr.py       # Radarr API
-    ├── aiostreams.py   # AIOStreams API
-    └── realdebrid.py   # Real-Debrid API
+    └── aiostreams.py   # AIOStreams API
 ```
 
 ## License

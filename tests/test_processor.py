@@ -10,7 +10,6 @@ def mock_config(monkeypatch):
     monkeypatch.setenv('RADARR_URL', 'http://test:7878')
     monkeypatch.setenv('RADARR_API_KEY', 'test_key')
     monkeypatch.setenv('AIOSTREAMS_URL', 'http://aio:8080')
-    monkeypatch.setenv('REALDEBRID_API_KEY', 'rd_key')
     return Config()
 
 
@@ -18,8 +17,7 @@ def mock_config(monkeypatch):
 def processor(mock_config):
     """Create processor with mocked clients"""
     with patch('src.processor.RadarrClient'), \
-         patch('src.processor.AIOStreamsClient'), \
-         patch('src.processor.RealDebridClient'):
+         patch('src.processor.AIOStreamsClient'):
         return MovieProcessor(mock_config)
 
 
@@ -27,7 +25,6 @@ def test_processor_initialization(processor):
     """Test processor initializes with all clients"""
     assert processor.radarr is not None
     assert processor.aiostreams is not None
-    assert processor.rd is not None
     assert processor.storage is not None
 
 
@@ -89,17 +86,15 @@ def test_process_movie_success_with_url(processor):
     assert processor.storage.should_skip(1) is True
 
 
-def test_process_movie_success_with_infohash(processor):
-    """Test successful movie processing with infohash (fallback)"""
+def test_process_movie_fails_without_url(processor):
+    """Test that processing fails if stream has no URL"""
     processor.aiostreams.search_movie = Mock(return_value=[
         {
             'title': '⚡ Test Movie 1080p',
-            'infoHash': 'abc123',
+            'infoHash': 'abc123',  # Has infohash but no URL
             'quality': 1080
         }
     ])
-    processor.rd.add_magnet = Mock(return_value='rd_123')
-    processor.radarr.unmonitor_movie = Mock(return_value=True)
 
     movie = {
         'id': 1,
@@ -110,10 +105,8 @@ def test_process_movie_success_with_infohash(processor):
 
     result = processor._process_movie(movie)
 
-    assert result is True
-    processor.rd.add_magnet.assert_called_once_with('abc123')
-    processor.radarr.unmonitor_movie.assert_called_once_with(1)
-    assert processor.storage.should_skip(1) is True
+    assert result is False
+    assert processor.storage.processed[1]['success'] is False
 
 
 def test_process_movie_uses_first_stream(processor):

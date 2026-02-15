@@ -3,7 +3,6 @@ from typing import Any
 
 from src.clients.aiostreams import AIOStreamsClient
 from src.clients.radarr import RadarrClient
-from src.clients.realdebrid import RealDebridClient
 from src.config import Config
 from src.storage import ProcessedMoviesStorage
 
@@ -17,7 +16,6 @@ class MovieProcessor:
         self.config = config
         self.radarr = RadarrClient(config.radarr_url, config.radarr_api_key)
         self.aiostreams = AIOStreamsClient(config.aiostreams_url)
-        self.rd = RealDebridClient(config.realdebrid_api_key)
         self.storage = ProcessedMoviesStorage()
 
     def process_wanted_movies(self) -> None:
@@ -77,28 +75,22 @@ class MovieProcessor:
         stream = streams[0]
         logger.info(f"Trying stream: {stream['title']}")
 
-        # If stream has a URL (AIOStreams playback URL), trigger it to add to RD
-        if stream.get('url'):
-            success = self._trigger_aiostreams_download(stream['url'], title)
-            if success:
-                logger.info(f"✓ Successfully triggered {title} via AIOStreams")
-                # Unmonitor the movie in Radarr
-                if self.radarr.unmonitor_movie(movie_id):
-                    logger.info(f"Unmonitored {title} in Radarr")
-                self.storage.mark_processed(movie_id, success=True)
-                return True
-        # Otherwise try adding via magnet/infohash
-        elif stream.get('infoHash'):
-            torrent_id = self.rd.add_magnet(stream['infoHash'])
-            if torrent_id:
-                logger.info(f"✓ Successfully added {title} to Real-Debrid (ID: {torrent_id})")
-                # Unmonitor the movie in Radarr
-                if self.radarr.unmonitor_movie(movie_id):
-                    logger.info(f"Unmonitored {title} in Radarr")
-                self.storage.mark_processed(movie_id, success=True)
-                return True
+        # Trigger AIOStreams playback URL to add to Real-Debrid
+        if not stream.get('url'):
+            logger.error(f"Stream has no playback URL for {title}")
+            self.storage.mark_processed(movie_id, success=False)
+            return False
 
-        logger.error(f"Failed to add {title} to Real-Debrid")
+        success = self._trigger_aiostreams_download(stream['url'], title)
+        if success:
+            logger.info(f"✓ Successfully triggered {title} via AIOStreams")
+            # Unmonitor the movie in Radarr
+            if self.radarr.unmonitor_movie(movie_id):
+                logger.info(f"Unmonitored {title} in Radarr")
+            self.storage.mark_processed(movie_id, success=True)
+            return True
+
+        logger.error(f"Failed to trigger download for {title}")
         self.storage.mark_processed(movie_id, success=False)
         return False
 

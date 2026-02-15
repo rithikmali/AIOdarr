@@ -12,7 +12,6 @@ class Config:
         self.radarr_url = self._get_required('RADARR_URL')
         self.radarr_api_key = self._get_required('RADARR_API_KEY')
         self.aiostreams_url = self._get_required('AIOSTREAMS_URL')
-        self.realdebrid_api_key = self._get_required('REALDEBRID_API_KEY')
 
         self.poll_interval_minutes = int(os.getenv('POLL_INTERVAL_MINUTES', '10'))
         self.retry_failed_hours = int(os.getenv('RETRY_FAILED_HOURS', '24'))
