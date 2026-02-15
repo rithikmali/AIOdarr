@@ -1,0 +1,213 @@
+import logging
+from typing import Any, Optional
+
+from src.clients.aiostreams import AIOStreamsClient
+from src.clients.radarr import RadarrClient
+from src.clients.sonarr import SonarrClient
+from src.config import Config
+from src.storage import ProcessedMoviesStorage
+
+logger = logging.getLogger(__name__)
+
+
+class MediaProcessor:
+    """Main processor for handling wanted movies and TV shows"""
+
+    def __init__(self, config: Config):
+        self.config = config
+        self.aiostreams = AIOStreamsClient(config.aiostreams_url)
+        self.storage = ProcessedMoviesStorage()
+
+        # Initialize clients based on configuration
+        self.radarr: Optional[RadarrClient] = None
+        if config.radarr_enabled:
+            self.radarr = RadarrClient(config.radarr_url, config.radarr_api_key)
+            logger.info("Radarr client initialized")
+
+        self.sonarr: Optional[SonarrClient] = None
+        if config.sonarr_enabled:
+            self.sonarr = SonarrClient(config.sonarr_url, config.sonarr_api_key)
+            logger.info("Sonarr client initialized")
+
+    def process_all(self) -> None:
+        """Process both movies and TV shows"""
+        if self.radarr:
+            self.process_wanted_movies()
+
+        if self.sonarr:
+            self.process_wanted_episodes()
+
+        # Log statistics
+        stats = self.storage.get_stats()
+        logger.info(f"Statistics - Total: {stats['total']}, "
+                   f"Successful: {stats['successful']}, "
+                   f"Failed: {stats['failed']}")
+
+    def process_wanted_movies(self) -> None:
+        """Process all wanted movies from Radarr"""
+        if not self.radarr:
+            return
+
+        logger.info("Checking for wanted movies...")
+        wanted = self.radarr.get_wanted_movies()
+        logger.info(f"Found {len(wanted)} wanted movies")
+
+        for movie in wanted:
+            movie_id = movie['id']
+
+            # Skip if recently processed
+            if self.storage.should_skip(movie_id, self.config.retry_failed_hours):
+                logger.debug(f"Skipping movie {movie_id} (recently processed)")
+                continue
+
+            self._process_movie(movie)
+
+    def process_wanted_episodes(self) -> None:
+        """Process all wanted episodes from Sonarr"""
+        if not self.sonarr:
+            return
+
+        logger.info("Checking for wanted episodes...")
+        wanted = self.sonarr.get_wanted_episodes()
+        logger.info(f"Found {len(wanted)} wanted episodes")
+
+        for episode in wanted:
+            episode_id = episode['id']
+
+            # Skip if recently processed (using same storage for simplicity)
+            # In production, you might want separate storage for episodes
+            storage_key = f"episode_{episode_id}"
+            if self.storage.should_skip(storage_key, self.config.retry_failed_hours):
+                logger.debug(f"Skipping episode {episode_id} (recently processed)")
+                continue
+
+            self._process_episode(episode)
+
+    def _process_movie(self, movie: dict[str, Any]) -> bool:
+        """Process a single movie"""
+        movie_id = movie['id']
+        title = movie['title']
+        year = movie.get('year', '')
+        imdb_id = movie.get('imdbId', '')
+
+        if not imdb_id:
+            logger.warning(f"No IMDB ID for {title} ({year}), skipping")
+            return False
+
+        logger.info(f"Processing movie: {title} ({year}) - IMDB: {imdb_id}")
+
+        # Query AIOStreams for cached torrents
+        streams = self.aiostreams.search_movie(imdb_id)
+
+        if not streams:
+            logger.warning(f"No cached streams found for {title}")
+            self.storage.mark_processed(movie_id, success=False)
+            return False
+
+        # Use first stream from AIOStreams (pre-sorted by their algorithm)
+        logger.info(f"Found {len(streams)} cached streams, using first one")
+        stream = streams[0]
+        logger.info(f"Trying stream: {stream['title']}")
+
+        # Trigger AIOStreams playback URL to add to Real-Debrid
+        if not stream.get('url'):
+            logger.error(f"Stream has no playback URL for {title}")
+            self.storage.mark_processed(movie_id, success=False)
+            return False
+
+        success = self._trigger_aiostreams_download(stream['url'], f"{title} ({year})")
+        if success:
+            logger.info(f"✓ Successfully triggered {title} via AIOStreams")
+            # Unmonitor the movie in Radarr
+            if self.radarr and self.radarr.unmonitor_movie(movie_id):
+                logger.info(f"Unmonitored {title} in Radarr")
+            self.storage.mark_processed(movie_id, success=True)
+            return True
+
+        logger.error(f"Failed to trigger download for {title}")
+        self.storage.mark_processed(movie_id, success=False)
+        return False
+
+    def _process_episode(self, episode: dict[str, Any]) -> bool:
+        """Process a single TV episode"""
+        episode_id = episode['id']
+        series = episode.get('series', {})
+        series_title = series.get('title', 'Unknown Series')
+        season_number = episode.get('seasonNumber', 0)
+        episode_number = episode.get('episodeNumber', 0)
+        title = episode.get('title', '')
+
+        # Get IMDB or TVDB ID from series
+        imdb_id = series.get('imdbId', '')
+        tvdb_id = series.get('tvdbId', '')
+
+        if not imdb_id and not tvdb_id:
+            logger.warning(f"No IMDB/TVDB ID for {series_title}, skipping")
+            return False
+
+        episode_label = f"{series_title} S{season_number:02d}E{episode_number:02d}"
+        if title:
+            episode_label += f" - {title}"
+
+        logger.info(f"Processing episode: {episode_label}")
+
+        # For TV shows, use IMDB ID with season/episode info
+        # AIOStreams format: /stream/series/{imdb_id}:{season}:{episode}.json
+        if imdb_id:
+            streams = self.aiostreams.search_episode(imdb_id, season_number, episode_number)
+        else:
+            logger.warning(f"No IMDB ID for {series_title}, cannot query AIOStreams")
+            self.storage.mark_processed(f"episode_{episode_id}", success=False)
+            return False
+
+        if not streams:
+            logger.warning(f"No cached streams found for {episode_label}")
+            self.storage.mark_processed(f"episode_{episode_id}", success=False)
+            return False
+
+        # Use first stream
+        logger.info(f"Found {len(streams)} cached streams, using first one")
+        stream = streams[0]
+        logger.info(f"Trying stream: {stream['title']}")
+
+        if not stream.get('url'):
+            logger.error(f"Stream has no playback URL for {episode_label}")
+            self.storage.mark_processed(f"episode_{episode_id}", success=False)
+            return False
+
+        success = self._trigger_aiostreams_download(stream['url'], episode_label)
+        if success:
+            logger.info(f"✓ Successfully triggered {episode_label} via AIOStreams")
+            # Unmonitor the episode in Sonarr
+            if self.sonarr and self.sonarr.unmonitor_episode(episode_id):
+                logger.info(f"Unmonitored {episode_label} in Sonarr")
+            self.storage.mark_processed(f"episode_{episode_id}", success=True)
+            return True
+
+        logger.error(f"Failed to trigger download for {episode_label}")
+        self.storage.mark_processed(f"episode_{episode_id}", success=False)
+        return False
+
+    def _trigger_aiostreams_download(self, url: str, title: str) -> bool:
+        """
+        Trigger AIOStreams to add torrent to Real-Debrid by streaming the URL
+
+        Args:
+            url: AIOStreams playback URL
+            title: Media title for logging
+
+        Returns:
+            True if successfully triggered, False otherwise
+        """
+        import requests
+
+        try:
+            logger.info(f"Triggering AIOStreams download via HEAD request to: {url[:100]}...")
+            # Use HEAD request to trigger the download without downloading content
+            response = requests.head(url, timeout=30, allow_redirects=True)
+            response.raise_for_status()
+            logger.info(f"Successfully triggered download for {title}")
+            return True
+        except Exception as e:
+            logger.error(f"Error triggering AIOStreams download: {e}")
+            return False

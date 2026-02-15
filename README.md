@@ -1,16 +1,16 @@
-# AIODarr - AIOStreams-Radarr Bridge
+# AIODarr - AIOStreams-Radarr/Sonarr Bridge
 
-Automatically adds wanted movies from Radarr to Real-Debrid using AIOStreams.
+Automatically adds wanted movies and TV shows from Radarr/Sonarr to Real-Debrid using AIOStreams.
 
 ## Overview
 
-This service bridges the gap between Radarr and AIOStreams, automatically:
-1. Monitors Radarr for wanted movies
+This service bridges the gap between Radarr/Sonarr and AIOStreams, automatically:
+1. Monitors Radarr for wanted movies and/or Sonarr for wanted episodes
 2. Searches AIOStreams for cached Real-Debrid torrents
 3. Triggers AIOStreams to add the torrent to Real-Debrid
-4. Unmonitors the movie in Radarr
+4. Unmonitors the media in Radarr/Sonarr
 5. Zurg creates symlinks automatically
-6. Radarr imports the movie when it detects the file
+6. Radarr/Sonarr imports the media when it detects the file
 
 ## How It Works
 
@@ -21,7 +21,9 @@ Instead of managing Real-Debrid API calls directly, this service leverages AIOSt
 
 ## Prerequisites
 
-- **Radarr** - Media management (v3+)
+- **Radarr** (optional) - Movie management (v3+)
+- **Sonarr** (optional) - TV show management (v3+)
+- **At least one** of Radarr or Sonarr must be configured
 - **AIOStreams** - Configured with Real-Debrid (via Stremio manifest URL)
 - **Real-Debrid** - Debrid service account (configured in AIOStreams)
 - **Zurg + rclone** - Mounted Real-Debrid filesystem

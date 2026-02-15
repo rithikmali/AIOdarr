@@ -53,6 +53,49 @@ class AIOStreamsClient:
             logger.error(f"Error querying AIOStreams for {imdb_id}: {e}")
             return []
 
+    def search_episode(self, imdb_id: str, season: int, episode: int) -> list[dict[str, Any]]:
+        """
+        Search for TV episode streams using IMDB ID and season/episode numbers
+
+        Args:
+            imdb_id: IMDB ID (e.g., 'tt1234567')
+            season: Season number
+            episode: Episode number
+
+        Returns:
+            List of cached stream dictionaries with title, url, quality
+        """
+        endpoint = f'{self.url}/stream/series/{imdb_id}:{season}:{episode}.json'
+
+        try:
+            response = requests.get(endpoint, timeout=30)
+            response.raise_for_status()
+            data = response.json()
+
+            streams = data.get('streams', [])
+
+            # Filter for cached Real-Debrid streams
+            cached_streams = []
+            for stream in streams:
+                # AIOStreams uses 'name' field, fallback to 'title'
+                title = stream.get('name') or stream.get('title', '')
+                description = stream.get('description', '')
+
+                # Check for cached indicators (⚡ or RD in title/name)
+                if '⚡' in title or 'RD+' in title or '[RD]' in title:
+                    cached_streams.append({
+                        'title': title,
+                        'url': stream.get('url'),
+                        'infoHash': stream.get('infoHash'),
+                        'quality': self._parse_quality(description or title)
+                    })
+
+            return cached_streams
+
+        except Exception as e:
+            logger.error(f"Error querying AIOStreams for {imdb_id} S{season}E{episode}: {e}")
+            return []
+
     def _parse_quality(self, title: str) -> int:
         """
         Extract quality from stream title

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-AIODarr - AIOStreams-Radarr Bridge
-Automatically adds wanted movies from Radarr to Real-Debrid using AIOStreams
+AIODarr - AIOStreams-Radarr/Sonarr Bridge
+Automatically adds wanted movies and TV shows to Real-Debrid using AIOStreams
 """
 
 import logging
@@ -10,7 +10,7 @@ import time
 import schedule
 
 from src.config import Config
-from src.processor import MovieProcessor
+from src.media_processor import MediaProcessor
 
 
 def setup_logging(log_level: str) -> None:
@@ -38,24 +38,27 @@ def main():
     logger = logging.getLogger(__name__)
 
     logger.info("=" * 60)
-    logger.info("AIODarr - AIOStreams-Radarr Bridge Starting")
+    logger.info("AIODarr - AIOStreams Media Bridge Starting")
     logger.info("=" * 60)
-    logger.info(f"Radarr URL: {config.radarr_url}")
+    if config.radarr_enabled:
+        logger.info(f"Radarr URL: {config.radarr_url}")
+    if config.sonarr_enabled:
+        logger.info(f"Sonarr URL: {config.sonarr_url}")
     logger.info(f"AIOStreams URL: {config.aiostreams_url}")
     logger.info(f"Poll Interval: {config.poll_interval_minutes} minutes")
     logger.info(f"Retry Failed: {config.retry_failed_hours} hours")
     logger.info("=" * 60)
 
     # Initialize processor
-    processor = MovieProcessor(config)
+    processor = MediaProcessor(config)
 
     # Run immediately on startup
     logger.info("Running initial check...")
-    processor.process_wanted_movies()
+    processor.process_all()
 
     # Schedule periodic checks
     schedule.every(config.poll_interval_minutes).minutes.do(
-        processor.process_wanted_movies
+        processor.process_all
     )
 
     logger.info(f"Scheduled to check every {config.poll_interval_minutes} minutes")
