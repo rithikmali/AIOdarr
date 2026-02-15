@@ -72,6 +72,7 @@ def test_process_movie_success_with_url(processor):
         }
     ])
     processor._trigger_aiostreams_download = Mock(return_value=True)
+    processor.radarr.unmonitor_movie = Mock(return_value=True)
 
     movie = {
         'id': 1,
@@ -84,6 +85,7 @@ def test_process_movie_success_with_url(processor):
 
     assert result is True
     processor._trigger_aiostreams_download.assert_called_once()
+    processor.radarr.unmonitor_movie.assert_called_once_with(1)
     assert processor.storage.should_skip(1) is True
 
 
@@ -97,6 +99,7 @@ def test_process_movie_success_with_infohash(processor):
         }
     ])
     processor.rd.add_magnet = Mock(return_value='rd_123')
+    processor.radarr.unmonitor_movie = Mock(return_value=True)
 
     movie = {
         'id': 1,
@@ -109,6 +112,7 @@ def test_process_movie_success_with_infohash(processor):
 
     assert result is True
     processor.rd.add_magnet.assert_called_once_with('abc123')
+    processor.radarr.unmonitor_movie.assert_called_once_with(1)
     assert processor.storage.should_skip(1) is True
 
 

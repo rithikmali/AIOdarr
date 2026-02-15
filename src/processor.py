@@ -82,6 +82,9 @@ class MovieProcessor:
             success = self._trigger_aiostreams_download(stream['url'], title)
             if success:
                 logger.info(f"✓ Successfully triggered {title} via AIOStreams")
+                # Unmonitor the movie in Radarr
+                if self.radarr.unmonitor_movie(movie_id):
+                    logger.info(f"Unmonitored {title} in Radarr")
                 self.storage.mark_processed(movie_id, success=True)
                 return True
         # Otherwise try adding via magnet/infohash
@@ -89,6 +92,9 @@ class MovieProcessor:
             torrent_id = self.rd.add_magnet(stream['infoHash'])
             if torrent_id:
                 logger.info(f"✓ Successfully added {title} to Real-Debrid (ID: {torrent_id})")
+                # Unmonitor the movie in Radarr
+                if self.radarr.unmonitor_movie(movie_id):
+                    logger.info(f"Unmonitored {title} in Radarr")
                 self.storage.mark_processed(movie_id, success=True)
                 return True
 

@@ -37,3 +37,33 @@ class RadarrClient:
         )
         response.raise_for_status()
         return response.json()
+
+    def unmonitor_movie(self, movie_id: int) -> bool:
+        """
+        Set movie as unmonitored in Radarr
+
+        Args:
+            movie_id: Radarr movie ID
+
+        Returns:
+            True if successfully unmonitored, False otherwise
+        """
+        try:
+            # First get the movie to get its current state
+            movie = self.get_movie(movie_id)
+
+            # Update monitored status to False
+            movie['monitored'] = False
+
+            # Send PUT request to update the movie
+            response = requests.put(
+                f'{self.url}/api/v3/movie/{movie_id}',
+                headers=self.headers,
+                json=movie
+            )
+            response.raise_for_status()
+            logger.info(f"Successfully unmonitored movie ID {movie_id}")
+            return True
+        except Exception as e:
+            logger.error(f"Error unmonitoring movie {movie_id}: {e}")
+            return False
