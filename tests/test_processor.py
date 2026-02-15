@@ -87,15 +87,14 @@ def test_process_movie_success(processor):
     assert processor.storage.should_skip(1) is True
 
 
-def test_process_movie_tries_multiple_streams(processor):
-    """Test that processor tries multiple streams on failure"""
+def test_process_movie_uses_first_stream(processor):
+    """Test that processor uses first stream from AIOStreams (pre-sorted)"""
     processor.aiostreams.search_movie = Mock(return_value=[
         {'title': 'Stream 1', 'infoHash': 'hash1', 'quality': 1080},
         {'title': 'Stream 2', 'infoHash': 'hash2', 'quality': 720},
         {'title': 'Stream 3', 'infoHash': 'hash3', 'quality': 480}
     ])
-    # First two fail, third succeeds
-    processor.rd.add_magnet = Mock(side_effect=[None, None, 'rd_123'])
+    processor.rd.add_magnet = Mock(return_value='rd_123')
 
     movie = {
         'id': 1,
@@ -107,7 +106,9 @@ def test_process_movie_tries_multiple_streams(processor):
     result = processor._process_movie(movie)
 
     assert result is True
-    assert processor.rd.add_magnet.call_count == 3
+    # Should only try first stream
+    assert processor.rd.add_magnet.call_count == 1
+    processor.rd.add_magnet.assert_called_once_with('hash1')
 
 
 def test_process_wanted_movies(processor):

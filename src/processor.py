@@ -72,20 +72,18 @@ class MovieProcessor:
             self.storage.mark_processed(movie_id, success=False)
             return False
 
-        # Sort by quality (highest first)
-        streams.sort(key=lambda x: x['quality'], reverse=True)
+        # Use first stream from AIOStreams (pre-sorted by their algorithm)
+        logger.info(f"Found {len(streams)} cached streams, using first one")
+        stream = streams[0]
+        logger.info(f"Trying stream: {stream['title']}")
 
-        # Try to add best streams to Real-Debrid
-        for stream in streams[:3]:  # Try top 3 streams
-            logger.info(f"Trying stream: {stream['title']}")
+        magnet = stream.get('magnet') or stream['infoHash']
+        torrent_id = self.rd.add_magnet(magnet)
 
-            magnet = stream.get('magnet') or stream['infoHash']
-            torrent_id = self.rd.add_magnet(magnet)
-
-            if torrent_id:
-                logger.info(f"✓ Successfully added {title} to Real-Debrid (ID: {torrent_id})")
-                self.storage.mark_processed(movie_id, success=True)
-                return True
+        if torrent_id:
+            logger.info(f"✓ Successfully added {title} to Real-Debrid (ID: {torrent_id})")
+            self.storage.mark_processed(movie_id, success=True)
+            return True
 
         logger.error(f"Failed to add {title} to Real-Debrid")
         self.storage.mark_processed(movie_id, success=False)
