@@ -40,12 +40,10 @@ class AIOStreamsClient:
 
                 # Check for cached indicators (⚡ or RD in title/name)
                 if '⚡' in title or 'RD+' in title or '[RD]' in title:
-                    url = stream.get('url')
-                    magnet = url if url and url.startswith('magnet:') else None
                     cached_streams.append({
                         'title': title,
+                        'url': stream.get('url'),
                         'infoHash': stream.get('infoHash'),
-                        'magnet': magnet,
                         'quality': self._parse_quality(description or title)
                     })
 

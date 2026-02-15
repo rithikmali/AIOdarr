@@ -23,7 +23,7 @@ def test_search_movie_with_cached_streams(mock_get, aio_client):
                 'name': '[RD⚡️☁️]\n4K🔥UHD',
                 'description': '🎬 Test Movie (2024)\n💎 ʀᴇᴍᴜx | 🎞️ ʜᴇᴠᴄ\n📦 50 GB\n📄 2160p',
                 'infoHash': 'abc123def456',
-                'url': None
+                'url': 'https://aiostreams.example.com/playback/test'
             },
             {
                 'name': 'Test Movie 2024 720p WEB-DL',
@@ -41,6 +41,7 @@ def test_search_movie_with_cached_streams(mock_get, aio_client):
     assert len(streams) == 1  # Only cached stream (⚡)
     assert '[RD⚡️☁️]' in streams[0]['title']
     assert streams[0]['infoHash'] == 'abc123def456'
+    assert streams[0]['url'] == 'https://aiostreams.example.com/playback/test'
     assert streams[0]['quality'] == 2160  # Should parse from description
     mock_get.assert_called_once_with(
         'http://localhost:8080/stream/movie/tt1234567.json',

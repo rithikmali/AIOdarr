@@ -77,14 +77,45 @@ class MovieProcessor:
         stream = streams[0]
         logger.info(f"Trying stream: {stream['title']}")
 
-        magnet = stream.get('magnet') or stream['infoHash']
-        torrent_id = self.rd.add_magnet(magnet)
-
-        if torrent_id:
-            logger.info(f"✓ Successfully added {title} to Real-Debrid (ID: {torrent_id})")
-            self.storage.mark_processed(movie_id, success=True)
-            return True
+        # If stream has a URL (AIOStreams playback URL), trigger it to add to RD
+        if stream.get('url'):
+            success = self._trigger_aiostreams_download(stream['url'], title)
+            if success:
+                logger.info(f"✓ Successfully triggered {title} via AIOStreams")
+                self.storage.mark_processed(movie_id, success=True)
+                return True
+        # Otherwise try adding via magnet/infohash
+        elif stream.get('infoHash'):
+            torrent_id = self.rd.add_magnet(stream['infoHash'])
+            if torrent_id:
+                logger.info(f"✓ Successfully added {title} to Real-Debrid (ID: {torrent_id})")
+                self.storage.mark_processed(movie_id, success=True)
+                return True
 
         logger.error(f"Failed to add {title} to Real-Debrid")
         self.storage.mark_processed(movie_id, success=False)
         return False
+
+    def _trigger_aiostreams_download(self, url: str, title: str) -> bool:
+        """
+        Trigger AIOStreams to add torrent to Real-Debrid by streaming the URL
+
+        Args:
+            url: AIOStreams playback URL
+            title: Movie title for logging
+
+        Returns:
+            True if successfully triggered, False otherwise
+        """
+        import requests
+
+        try:
+            logger.info(f"Triggering AIOStreams download via HEAD request to: {url[:100]}...")
+            # Use HEAD request to trigger the download without downloading content
+            response = requests.head(url, timeout=30, allow_redirects=True)
+            response.raise_for_status()
+            logger.info(f"Successfully triggered download for {title}")
+            return True
+        except Exception as e:
+            logger.error(f"Error triggering AIOStreams download: {e}")
+            return False
