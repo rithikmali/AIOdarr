@@ -34,9 +34,11 @@ class AIOStreamsClient:
             # Filter for cached Real-Debrid streams
             cached_streams = []
             for stream in streams:
-                title = stream.get('title', '')
+                # AIOStreams uses 'name' field, fallback to 'title'
+                title = stream.get('name') or stream.get('title', '')
+                description = stream.get('description', '')
 
-                # Check for cached indicators (⚡ or RD in title)
+                # Check for cached indicators (⚡ or RD in title/name)
                 if '⚡' in title or 'RD+' in title or '[RD]' in title:
                     url = stream.get('url')
                     magnet = url if url and url.startswith('magnet:') else None
@@ -44,7 +46,7 @@ class AIOStreamsClient:
                         'title': title,
                         'infoHash': stream.get('infoHash'),
                         'magnet': magnet,
-                        'quality': self._parse_quality(title)
+                        'quality': self._parse_quality(description or title)
                     })
 
             return cached_streams

@@ -23,6 +23,10 @@ def test_config_uses_defaults(monkeypatch):
     monkeypatch.setenv('RADARR_API_KEY', 'test_key')
     monkeypatch.setenv('AIOSTREAMS_URL', 'http://aio:8080')
     monkeypatch.setenv('REALDEBRID_API_KEY', 'rd_key')
+    # Clear optional env vars to test defaults
+    monkeypatch.delenv('POLL_INTERVAL_MINUTES', raising=False)
+    monkeypatch.delenv('RETRY_FAILED_HOURS', raising=False)
+    monkeypatch.delenv('LOG_LEVEL', raising=False)
 
     config = Config()
 
