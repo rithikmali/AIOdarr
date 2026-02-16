@@ -85,3 +85,42 @@ def test_notify_success_sends_episode_embed():
         assert any("Pilot" in field["value"] for field in embed["fields"])
         assert any("1080p" in field["value"] for field in embed["fields"])
         assert any("tt0959621" in field["value"] for field in embed["fields"])
+
+
+def test_collect_failure_appends_to_list():
+    """Test collect_failure appends failure to list without sending"""
+    webhook_url = "https://discord.com/api/webhooks/123/abc"
+    notifier = DiscordNotifier(webhook_url)
+
+    with patch.object(notifier, "_send_webhook") as mock_send:
+        notifier.collect_failure(
+            media_type="movie",
+            title="The Matrix (1999)",
+            reason="No cached streams available",
+            details={"imdb_id": "tt0133093"},
+        )
+
+        # Should NOT send webhook immediately
+        mock_send.assert_not_called()
+
+        # Should append to failures list
+        assert len(notifier.failures) == 1
+        assert notifier.failures[0]["media_type"] == "movie"
+        assert notifier.failures[0]["title"] == "The Matrix (1999)"
+        assert notifier.failures[0]["reason"] == "No cached streams available"
+
+
+def test_collect_failure_with_webhook_disabled():
+    """Test collect_failure does nothing when webhook is None"""
+    notifier = DiscordNotifier(None)
+
+    # Should not raise exception
+    notifier.collect_failure(
+        media_type="movie",
+        title="The Matrix (1999)",
+        reason="No cached streams available",
+        details={},
+    )
+
+    # Failures list should remain empty when webhook disabled
+    assert len(notifier.failures) == 0

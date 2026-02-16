@@ -84,6 +84,25 @@ class DiscordNotifier:
 
         return embed
 
+    def collect_failure(
+        self, media_type: str, title: str, reason: str, details: dict[str, Any]
+    ) -> None:
+        """
+        Collect failure for batched summary notification
+
+        Args:
+            media_type: Type of media ("movie" or "episode")
+            title: Media title
+            reason: Failure reason
+            details: Additional details
+        """
+        if not self.webhook_url:
+            return
+
+        self.failures.append(
+            {"media_type": media_type, "title": title, "reason": reason, "details": details}
+        )
+
     def _send_webhook(self, embed: dict[str, Any]) -> bool:
         """
         Send embed to Discord webhook
