@@ -57,6 +57,19 @@ class DiscordNotifier:
             "timestamp": datetime.now(UTC).isoformat(),
         }
 
+        # Add episode-specific fields
+        if media_type == "episode":
+            season = details.get("season")
+            episode = details.get("episode")
+            if season is not None and episode is not None:
+                embed["fields"].append(
+                    {"name": "Episode", "value": f"S{season:02d}E{episode:02d}", "inline": True}
+                )
+            if episode_title := details.get("episode_title"):
+                embed["fields"].append(
+                    {"name": "Episode Title", "value": episode_title, "inline": True}
+                )
+
         # Add quality if available
         if quality := details.get("quality"):
             embed["fields"].append({"name": "Quality", "value": quality, "inline": True})

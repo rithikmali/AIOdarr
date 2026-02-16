@@ -53,3 +53,35 @@ def test_notify_success_with_webhook_disabled():
 
     # Should not raise exception
     notifier.notify_success(media_type="movie", title="The Matrix (1999)", details={"year": 1999})
+
+
+def test_notify_success_sends_episode_embed():
+    """Test notify_success sends formatted episode embed with series info"""
+    webhook_url = "https://discord.com/api/webhooks/123/abc"
+    notifier = DiscordNotifier(webhook_url)
+
+    with patch.object(notifier, "_send_webhook", return_value=True) as mock_send:
+        notifier.notify_success(
+            media_type="episode",
+            title="Breaking Bad",
+            details={
+                "season": 1,
+                "episode": 1,
+                "episode_title": "Pilot",
+                "imdb_id": "tt0959621",
+                "quality": "1080p",
+                "stream_title": "Breaking.Bad.S01E01.1080p.WEB",
+            },
+        )
+
+        mock_send.assert_called_once()
+        embed = mock_send.call_args[0][0]
+
+        assert embed["color"] == 0x00FF00  # Green
+        assert "✓" in embed["title"]
+        assert "Breaking Bad" in embed["title"]
+        # Check for episode-specific fields
+        assert any("S01E01" in field["value"] for field in embed["fields"])
+        assert any("Pilot" in field["value"] for field in embed["fields"])
+        assert any("1080p" in field["value"] for field in embed["fields"])
+        assert any("tt0959621" in field["value"] for field in embed["fields"])
