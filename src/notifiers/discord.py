@@ -121,7 +121,8 @@ class DiscordNotifier:
 
     def _format_failure_summary_embed(self) -> dict[str, Any]:
         """
-        Format batched failures as Discord embed, grouped by media type
+        Format batched failures as Discord embed, grouped by media type.
+        Truncates to stay within Discord's 6000 char total and 4096 char field limits.
 
         Returns:
             Discord embed dict
@@ -134,24 +135,68 @@ class DiscordNotifier:
             "timestamp": datetime.now(UTC).isoformat(),
         }
 
+        # Discord limits: 6000 chars total, 4096 chars per field (description)
+        # Reserve space for title, timestamp overhead, and truncation message
+        MAX_DESCRIPTION_LENGTH = 4000  # Leave buffer for truncation message
+        MAX_TOTAL_LENGTH = 5800  # Leave buffer for title and other fields
+        TRUNCATION_MESSAGE_LENGTH = 50  # Estimated length of "...and X more items" message
+
         # Group failures by media type
         movies = [f for f in self.failures if f["media_type"] == "movie"]
         episodes = [f for f in self.failures if f["media_type"] == "episode"]
 
+        description_parts = []
+        truncated_movies = 0
+        truncated_episodes = 0
+
+        def get_current_length():
+            """Helper to get current accumulated description length"""
+            return len("".join(description_parts))
+
         # Format movies section
         if movies:
             movie_label = "Movies" if len(movies) > 1 else "Movie"
-            embed["description"] += f"**{movie_label} ({len(movies)})**\n"
+            section_header = f"**{movie_label} ({len(movies)})**\n"
+            section_content = []
+
             for failure in movies:
                 title = failure["title"]
                 reason = failure["reason"]
-                embed["description"] += f"• {title} - {reason}\n"
-            embed["description"] += "\n"
+                line = f"• {title} - {reason}\n"
+
+                # Calculate what total length would be with this line
+                current_total = get_current_length()
+                new_total = (
+                    current_total
+                    + len(section_header)
+                    + len("".join(section_content))
+                    + len(line)
+                    + TRUNCATION_MESSAGE_LENGTH
+                    + 2  # for trailing "\n"
+                )
+
+                # Check both total and field limits
+                if new_total > MAX_TOTAL_LENGTH or new_total > MAX_DESCRIPTION_LENGTH:
+                    truncated_movies = len(movies) - len(section_content)
+                    break
+
+                section_content.append(line)
+
+            # Add the movies section
+            description_parts.append(section_header)
+            description_parts.extend(section_content)
+
+            if truncated_movies > 0:
+                description_parts.append(f"_...and {truncated_movies} more movies_\n")
+
+            description_parts.append("\n")
 
         # Format episodes section
         if episodes:
             episode_label = "Episodes" if len(episodes) > 1 else "Episode"
-            embed["description"] += f"**{episode_label} ({len(episodes)})**\n"
+            section_header = f"**{episode_label} ({len(episodes)})**\n"
+            section_content = []
+
             for failure in episodes:
                 title = failure["title"]
                 reason = failure["reason"]
@@ -161,10 +206,34 @@ class DiscordNotifier:
                 episode_num = details.get("episode")
                 if season is not None and episode_num is not None:
                     title = f"{title} S{season:02d}E{episode_num:02d}"
-                embed["description"] += f"• {title} - {reason}\n"
+                line = f"• {title} - {reason}\n"
 
-        # Remove trailing newline
-        embed["description"] = embed["description"].rstrip()
+                # Calculate what total length would be with this line
+                current_total = get_current_length()
+                new_total = (
+                    current_total
+                    + len(section_header)
+                    + len("".join(section_content))
+                    + len(line)
+                    + TRUNCATION_MESSAGE_LENGTH
+                )
+
+                # Check both total and field limits
+                if new_total > MAX_TOTAL_LENGTH or new_total > MAX_DESCRIPTION_LENGTH:
+                    truncated_episodes = len(episodes) - len(section_content)
+                    break
+
+                section_content.append(line)
+
+            # Add the episodes section
+            description_parts.append(section_header)
+            description_parts.extend(section_content)
+
+            if truncated_episodes > 0:
+                description_parts.append(f"_...and {truncated_episodes} more episodes_\n")
+
+        # Combine all parts
+        embed["description"] = "".join(description_parts).rstrip()
 
         return embed
 

@@ -251,3 +251,83 @@ def test_send_webhook_network_error(mock_post):
 
     assert result is False
     mock_post.assert_called_once()
+
+
+def test_failure_summary_truncates_long_description():
+    """Test failure summary truncates description to stay under Discord's 6000 char limit"""
+    webhook_url = "https://discord.com/api/webhooks/123/abc"
+    notifier = DiscordNotifier(webhook_url)
+
+    # Collect 100 failures with moderately long titles and reasons
+    for i in range(100):
+        notifier.collect_failure(
+            media_type="movie" if i % 2 == 0 else "episode",
+            title=f"Very Long Movie Title Number {i} With Extra Words",
+            reason="No cached streams available with sufficient quality",
+            details={
+                "season": i // 10 if i % 2 == 1 else None,
+                "episode": i % 10 if i % 2 == 1 else None,
+            },
+        )
+
+    embed = notifier._format_failure_summary_embed()
+
+    # Total embed size must be under 6000 characters
+    total_size = len(embed["title"]) + len(embed["description"])
+    assert total_size < 6000, f"Embed size {total_size} exceeds 6000 character limit"
+
+    # Description alone must be under Discord's field limit
+    assert len(embed["description"]) <= 4096, "Description exceeds 4096 character field limit"
+
+    # Should indicate truncation occurred
+    assert "more" in embed["description"].lower() or "additional" in embed["description"].lower()
+
+
+def test_failure_summary_shows_all_items_when_short():
+    """Test failure summary shows all items when description is short enough"""
+    webhook_url = "https://discord.com/api/webhooks/123/abc"
+    notifier = DiscordNotifier(webhook_url)
+
+    # Collect just 5 failures
+    for i in range(5):
+        notifier.collect_failure(
+            media_type="movie",
+            title=f"Movie {i}",
+            reason="No streams",
+            details={},
+        )
+
+    embed = notifier._format_failure_summary_embed()
+
+    # All 5 movies should be listed
+    description = embed["description"]
+    for i in range(5):
+        assert f"Movie {i}" in description
+
+    # Should not indicate truncation
+    assert "more" not in description.lower()
+    assert "additional" not in description.lower()
+
+
+def test_failure_summary_truncates_per_field_limit():
+    """Test failure summary respects Discord's 1024 char field limit per section"""
+    webhook_url = "https://discord.com/api/webhooks/123/abc"
+    notifier = DiscordNotifier(webhook_url)
+
+    # Collect many movie failures to exceed per-field limit
+    for i in range(30):
+        notifier.collect_failure(
+            media_type="movie",
+            title=f"Movie Title Number {i} With A Very Long Name To Make It Exceed Limits",
+            reason="No cached streams available with sufficient quality for this media",
+            details={},
+        )
+
+    embed = notifier._format_failure_summary_embed()
+
+    # Find the movies section in the description
+    description = embed["description"]
+
+    # Should have truncated the list and shown truncation message
+    assert len(description) <= 4096
+    assert "more" in description.lower() or "additional" in description.lower()

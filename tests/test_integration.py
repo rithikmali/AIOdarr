@@ -19,9 +19,10 @@ def mock_env(monkeypatch):
     monkeypatch.setenv("POLL_INTERVAL_MINUTES", "1")
 
 
+@patch("time.sleep")
 @patch("schedule.run_pending")
 @patch("src.media_processor.MediaProcessor.process_all")
-def test_full_workflow_integration(mock_process, mock_schedule, mock_env):
+def test_full_workflow_integration(mock_process, mock_schedule, mock_sleep, mock_env):
     """Test complete workflow from startup to processing"""
     # Mock the schedule to run once then stop
     call_count = {"count": 0}

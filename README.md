@@ -238,6 +238,7 @@ sudo journalctl -u aiodarr -f
 | `POLL_INTERVAL_MINUTES` | `10` | How often to check Radarr |
 | `RETRY_FAILED_HOURS` | `24` | Wait time before retrying failed movies |
 | `LOG_LEVEL` | `INFO` | Logging level (DEBUG, INFO, WARNING, ERROR) |
+| `DISCORD_WEBHOOK_URL` | _(empty)_ | Discord webhook URL for notifications (optional) |
 
 ## Troubleshooting
 

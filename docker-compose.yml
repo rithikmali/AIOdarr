@@ -15,6 +15,7 @@ services:
       - POLL_INTERVAL_MINUTES=${POLL_INTERVAL_MINUTES:-10}
       - RETRY_FAILED_HOURS=${RETRY_FAILED_HOURS:-24}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - DISCORD_WEBHOOK_URL=${DISCORD_WEBHOOK_URL:-}
     env_file:
       - .env
     # Uncomment if you need to access local network services

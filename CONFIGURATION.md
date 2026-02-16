@@ -33,6 +33,27 @@ RETRY_FAILED_HOURS=24        # Wait time before retrying failed downloads
 LOG_LEVEL=INFO               # DEBUG, INFO, WARNING, ERROR
 ```
 
+### Discord Notifications (Optional)
+
+Send notifications to a Discord channel when media is successfully processed or when failures occur.
+
+```env
+DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/YOUR_WEBHOOK_ID/YOUR_WEBHOOK_TOKEN
+```
+
+**Setup:**
+1. Open your Discord server
+2. Go to **Server Settings → Integrations → Webhooks**
+3. Click **New Webhook**
+4. Choose a channel and copy the **Webhook URL**
+5. Set the `DISCORD_WEBHOOK_URL` environment variable
+
+**Behavior:**
+- **Success notifications** are sent immediately when a movie or episode is added
+- **Failure notifications** are batched and sent as a summary at the end of each polling cycle
+- If the webhook URL is not set, notifications are silently disabled
+- Webhook errors never block media processing
+
 ## Configuration Examples
 
 ### Movies Only (Radarr)

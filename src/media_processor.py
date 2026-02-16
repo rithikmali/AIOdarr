@@ -5,6 +5,7 @@ from src.clients.aiostreams import AIOStreamsClient
 from src.clients.radarr import RadarrClient
 from src.clients.sonarr import SonarrClient
 from src.config import Config
+from src.notifiers.discord import DiscordNotifier
 from src.storage import ProcessedMoviesStorage
 
 logger = logging.getLogger(__name__)
@@ -29,6 +30,12 @@ class MediaProcessor:
             self.sonarr = SonarrClient(config.sonarr_url, config.sonarr_api_key)
             logger.info("Sonarr client initialized")
 
+        # Initialize Discord notifier if webhook URL is configured
+        self.notifier: DiscordNotifier | None = None
+        if config.discord_webhook_url:
+            self.notifier = DiscordNotifier(config.discord_webhook_url)
+            logger.info("Discord notifier initialized")
+
     def process_all(self) -> None:
         """Process both movies and TV shows"""
         if self.radarr:
@@ -44,6 +51,10 @@ class MediaProcessor:
             f"Successful: {stats['successful']}, "
             f"Failed: {stats['failed']}"
         )
+
+        # Send batched failure summary
+        if self.notifier:
+            self.notifier.send_failure_summary()
 
     def process_wanted_movies(self) -> None:
         """Process all wanted movies from Radarr"""
@@ -94,6 +105,13 @@ class MediaProcessor:
 
         if not imdb_id:
             logger.warning(f"No IMDB ID for {title} ({year}), skipping")
+            if self.notifier:
+                self.notifier.collect_failure(
+                    media_type="movie",
+                    title=f"{title} ({year})",
+                    reason="No IMDB ID found",
+                    details={"movie_id": movie_id},
+                )
             return False
 
         logger.info(f"Processing movie: {title} ({year}) - IMDB: {imdb_id}")
@@ -104,6 +122,13 @@ class MediaProcessor:
         if not streams:
             logger.warning(f"No cached streams found for {title}")
             self.storage.mark_processed(movie_id, success=False)
+            if self.notifier:
+                self.notifier.collect_failure(
+                    media_type="movie",
+                    title=f"{title} ({year})",
+                    reason="No cached streams available",
+                    details={"imdb_id": imdb_id},
+                )
             return False
 
         # Use first stream from AIOStreams (pre-sorted by their algorithm)
@@ -115,6 +140,13 @@ class MediaProcessor:
         if not stream.get("url"):
             logger.error(f"Stream has no playback URL for {title}")
             self.storage.mark_processed(movie_id, success=False)
+            if self.notifier:
+                self.notifier.collect_failure(
+                    media_type="movie",
+                    title=f"{title} ({year})",
+                    reason="No playback URL in stream",
+                    details={"imdb_id": imdb_id},
+                )
             return False
 
         success = self._trigger_aiostreams_download(stream["url"], f"{title} ({year})")
@@ -124,10 +156,29 @@ class MediaProcessor:
             if self.radarr and self.radarr.unmonitor_movie(movie_id):
                 logger.info(f"Unmonitored {title} in Radarr")
             self.storage.mark_processed(movie_id, success=True)
+            # Notify Discord of success
+            if self.notifier:
+                self.notifier.notify_success(
+                    media_type="movie",
+                    title=f"{title} ({year})",
+                    details={
+                        "year": year,
+                        "imdb_id": imdb_id,
+                        "quality": stream.get("description", "Unknown"),
+                        "stream_title": stream.get("title", ""),
+                    },
+                )
             return True
 
         logger.error(f"Failed to trigger download for {title}")
         self.storage.mark_processed(movie_id, success=False)
+        if self.notifier:
+            self.notifier.collect_failure(
+                media_type="movie",
+                title=f"{title} ({year})",
+                reason="Download trigger failed",
+                details={"imdb_id": imdb_id, "stream_url": stream["url"]},
+            )
         return False
 
     def _process_episode(self, episode: dict[str, Any]) -> bool:
@@ -145,6 +196,13 @@ class MediaProcessor:
 
         if not imdb_id and not tvdb_id:
             logger.warning(f"No IMDB/TVDB ID for {series_title}, skipping")
+            if self.notifier:
+                self.notifier.collect_failure(
+                    media_type="episode",
+                    title=f"{series_title} S{season_number:02d}E{episode_number:02d}",
+                    reason="No IMDB/TVDB ID found",
+                    details={"episode_id": episode_id},
+                )
             return False
 
         episode_label = f"{series_title} S{season_number:02d}E{episode_number:02d}"
@@ -160,11 +218,29 @@ class MediaProcessor:
         else:
             logger.warning(f"No IMDB ID for {series_title}, cannot query AIOStreams")
             self.storage.mark_processed(f"episode_{episode_id}", success=False)
+            if self.notifier:
+                self.notifier.collect_failure(
+                    media_type="episode",
+                    title=episode_label,
+                    reason="No IMDB ID for series",
+                    details={"series_title": series_title},
+                )
             return False
 
         if not streams:
             logger.warning(f"No cached streams found for {episode_label}")
             self.storage.mark_processed(f"episode_{episode_id}", success=False)
+            if self.notifier:
+                self.notifier.collect_failure(
+                    media_type="episode",
+                    title=episode_label,
+                    reason="No cached streams available",
+                    details={
+                        "imdb_id": imdb_id,
+                        "season": season_number,
+                        "episode": episode_number,
+                    },
+                )
             return False
 
         # Use first stream
@@ -175,6 +251,13 @@ class MediaProcessor:
         if not stream.get("url"):
             logger.error(f"Stream has no playback URL for {episode_label}")
             self.storage.mark_processed(f"episode_{episode_id}", success=False)
+            if self.notifier:
+                self.notifier.collect_failure(
+                    media_type="episode",
+                    title=episode_label,
+                    reason="No playback URL in stream",
+                    details={"imdb_id": imdb_id},
+                )
             return False
 
         success = self._trigger_aiostreams_download(stream["url"], episode_label)
@@ -184,10 +267,32 @@ class MediaProcessor:
             if self.sonarr and self.sonarr.unmonitor_episode(episode_id):
                 logger.info(f"Unmonitored {episode_label} in Sonarr")
             self.storage.mark_processed(f"episode_{episode_id}", success=True)
+            # Notify Discord of success
+            if self.notifier:
+                self.notifier.notify_success(
+                    media_type="episode",
+                    title=episode_label,
+                    details={
+                        "series_title": series_title,
+                        "season": season_number,
+                        "episode": episode_number,
+                        "episode_title": title,
+                        "imdb_id": imdb_id,
+                        "quality": stream.get("description", "Unknown"),
+                        "stream_title": stream.get("title", ""),
+                    },
+                )
             return True
 
         logger.error(f"Failed to trigger download for {episode_label}")
         self.storage.mark_processed(f"episode_{episode_id}", success=False)
+        if self.notifier:
+            self.notifier.collect_failure(
+                media_type="episode",
+                title=episode_label,
+                reason="Download trigger failed",
+                details={"imdb_id": imdb_id, "stream_url": stream["url"]},
+            )
         return False
 
     def _trigger_aiostreams_download(self, url: str, title: str) -> bool:
