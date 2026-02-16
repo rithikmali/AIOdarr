@@ -53,3 +53,25 @@ def test_config_validates_at_least_one_service(monkeypatch):
 
     with pytest.raises(ValueError, match="At least one of Radarr or Sonarr must be configured"):
         Config()
+
+
+def test_discord_webhook_url_loads_when_set(monkeypatch):
+    """Test Discord webhook URL loads from environment"""
+    monkeypatch.setenv("AIOSTREAMS_URL", "http://aiostreams")
+    monkeypatch.setenv("RADARR_URL", "http://radarr")
+    monkeypatch.setenv("RADARR_API_KEY", "test-key")
+    monkeypatch.setenv("DISCORD_WEBHOOK_URL", "https://discord.com/api/webhooks/123/abc")
+
+    config = Config()
+    assert config.discord_webhook_url == "https://discord.com/api/webhooks/123/abc"
+
+
+def test_discord_webhook_url_defaults_to_empty_string(monkeypatch):
+    """Test Discord webhook URL defaults to empty string when not set"""
+    monkeypatch.setenv("AIOSTREAMS_URL", "http://aiostreams")
+    monkeypatch.setenv("RADARR_URL", "http://radarr")
+    monkeypatch.setenv("RADARR_API_KEY", "test-key")
+    monkeypatch.delenv("DISCORD_WEBHOOK_URL", raising=False)
+
+    config = Config()
+    assert config.discord_webhook_url == ""
