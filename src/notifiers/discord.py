@@ -178,5 +178,15 @@ class DiscordNotifier:
         Returns:
             True if successful, False otherwise
         """
-        # Placeholder - will implement in later task
-        return True
+        import requests
+
+        try:
+            response = requests.post(self.webhook_url, json={"embeds": [embed]}, timeout=10)
+            response.raise_for_status()
+            return True
+        except requests.HTTPError as e:
+            logger.error(f"HTTP error sending Discord webhook: {e}")
+            return False
+        except requests.RequestException as e:
+            logger.error(f"Network error sending Discord webhook: {e}")
+            return False

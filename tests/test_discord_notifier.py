@@ -198,3 +198,56 @@ def test_send_failure_summary_with_webhook_disabled():
     # Should not raise exception even if failures were somehow collected
     # (though collect_failure also skips when webhook is None)
     notifier.send_failure_summary()
+
+
+@patch("requests.post")
+def test_send_webhook_success(mock_post):
+    """Test _send_webhook succeeds with valid response"""
+    webhook_url = "https://discord.com/api/webhooks/123/abc"
+    notifier = DiscordNotifier(webhook_url)
+
+    # Mock successful response
+    mock_post.return_value.status_code = 204
+    mock_post.return_value.raise_for_status = lambda: None
+
+    embed = {"title": "Test", "color": 0x00FF00}
+    result = notifier._send_webhook(embed)
+
+    assert result is True
+    mock_post.assert_called_once_with(webhook_url, json={"embeds": [embed]}, timeout=10)
+
+
+@patch("requests.post")
+def test_send_webhook_http_error(mock_post):
+    """Test _send_webhook handles HTTP errors gracefully"""
+    import requests
+
+    webhook_url = "https://discord.com/api/webhooks/123/abc"
+    notifier = DiscordNotifier(webhook_url)
+
+    # Mock HTTP error
+    mock_post.return_value.raise_for_status.side_effect = requests.HTTPError("400 Bad Request")
+
+    embed = {"title": "Test", "color": 0x00FF00}
+    result = notifier._send_webhook(embed)
+
+    assert result is False
+    mock_post.assert_called_once()
+
+
+@patch("requests.post")
+def test_send_webhook_network_error(mock_post):
+    """Test _send_webhook handles network errors gracefully"""
+    import requests
+
+    webhook_url = "https://discord.com/api/webhooks/123/abc"
+    notifier = DiscordNotifier(webhook_url)
+
+    # Mock network error
+    mock_post.side_effect = requests.RequestException("Network error")
+
+    embed = {"title": "Test", "color": 0x00FF00}
+    result = notifier._send_webhook(embed)
+
+    assert result is False
+    mock_post.assert_called_once()
