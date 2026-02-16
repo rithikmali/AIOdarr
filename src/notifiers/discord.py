@@ -103,6 +103,71 @@ class DiscordNotifier:
             {"media_type": media_type, "title": title, "reason": reason, "details": details}
         )
 
+    def send_failure_summary(self) -> None:
+        """
+        Send batched failure summary notification to Discord and clear failures list
+        """
+        if not self.webhook_url:
+            return
+
+        if not self.failures:
+            return
+
+        embed = self._format_failure_summary_embed()
+        success = self._send_webhook(embed)
+        if success:
+            logger.info(f"Sent Discord failure summary for {len(self.failures)} items")
+            self.failures.clear()
+
+    def _format_failure_summary_embed(self) -> dict[str, Any]:
+        """
+        Format batched failures as Discord embed, grouped by media type
+
+        Returns:
+            Discord embed dict
+        """
+        total_count = len(self.failures)
+        embed = {
+            "title": f"✗ Failed to process {total_count} items",
+            "description": "",
+            "color": 0xFF0000,  # Red
+            "timestamp": datetime.now(UTC).isoformat(),
+        }
+
+        # Group failures by media type
+        movies = [f for f in self.failures if f["media_type"] == "movie"]
+        episodes = [f for f in self.failures if f["media_type"] == "episode"]
+
+        # Format movies section
+        if movies:
+            movie_label = "Movies" if len(movies) > 1 else "Movie"
+            embed["description"] += f"**{movie_label} ({len(movies)})**\n"
+            for failure in movies:
+                title = failure["title"]
+                reason = failure["reason"]
+                embed["description"] += f"• {title} - {reason}\n"
+            embed["description"] += "\n"
+
+        # Format episodes section
+        if episodes:
+            episode_label = "Episodes" if len(episodes) > 1 else "Episode"
+            embed["description"] += f"**{episode_label} ({len(episodes)})**\n"
+            for failure in episodes:
+                title = failure["title"]
+                reason = failure["reason"]
+                details = failure["details"]
+                # Add episode info if available
+                season = details.get("season")
+                episode_num = details.get("episode")
+                if season is not None and episode_num is not None:
+                    title = f"{title} S{season:02d}E{episode_num:02d}"
+                embed["description"] += f"• {title} - {reason}\n"
+
+        # Remove trailing newline
+        embed["description"] = embed["description"].rstrip()
+
+        return embed
+
     def _send_webhook(self, embed: dict[str, Any]) -> bool:
         """
         Send embed to Discord webhook
