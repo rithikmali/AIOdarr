@@ -17,8 +17,8 @@ def setup_logging(log_level: str) -> None:
     """Configure logging"""
     logging.basicConfig(
         level=getattr(logging, log_level),
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        datefmt='%Y-%m-%d %H:%M:%S'
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
     )
 
 
@@ -57,9 +57,7 @@ def main():
     processor.process_all()
 
     # Schedule periodic checks
-    schedule.every(config.poll_interval_minutes).minutes.do(
-        processor.process_all
-    )
+    schedule.every(config.poll_interval_minutes).minutes.do(processor.process_all)
 
     logger.info(f"Scheduled to check every {config.poll_interval_minutes} minutes")
     logger.info("Press Ctrl+C to stop")
@@ -74,5 +72,5 @@ def main():
         return 0
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     exit(main())

@@ -10,31 +10,28 @@ class SonarrClient:
     """Client for interacting with Sonarr API"""
 
     def __init__(self, url: str, api_key: str):
-        self.url = url.rstrip('/')
+        self.url = url.rstrip("/")
         self.api_key = api_key
-        self.headers = {'X-Api-Key': api_key}
+        self.headers = {"X-Api-Key": api_key}
 
     def get_wanted_episodes(self) -> list[dict[str, Any]]:
         """Get all wanted (missing) episodes from Sonarr"""
         try:
             response = requests.get(
-                f'{self.url}/api/v3/wanted/missing',
+                f"{self.url}/api/v3/wanted/missing",
                 headers=self.headers,
-                params={'pageSize': 1000, 'includeSeries': True}
+                params={"pageSize": 1000, "includeSeries": True},
             )
             response.raise_for_status()
             data = response.json()
-            return data['records']
+            return data["records"]
         except requests.RequestException as e:
             logger.error(f"Error fetching wanted episodes from Sonarr: {e}")
             return []
 
     def get_episode(self, episode_id: int) -> dict[str, Any]:
         """Get episode details by ID"""
-        response = requests.get(
-            f'{self.url}/api/v3/episode/{episode_id}',
-            headers=self.headers
-        )
+        response = requests.get(f"{self.url}/api/v3/episode/{episode_id}", headers=self.headers)
         response.raise_for_status()
         return response.json()
 
@@ -53,13 +50,11 @@ class SonarrClient:
             episode = self.get_episode(episode_id)
 
             # Update monitored status to False
-            episode['monitored'] = False
+            episode["monitored"] = False
 
             # Send PUT request to update the episode
             response = requests.put(
-                f'{self.url}/api/v3/episode/{episode_id}',
-                headers=self.headers,
-                json=episode
+                f"{self.url}/api/v3/episode/{episode_id}", headers=self.headers, json=episode
             )
             response.raise_for_status()
             logger.info(f"Successfully unmonitored episode ID {episode_id}")

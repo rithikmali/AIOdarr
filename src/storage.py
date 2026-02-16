@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Any
 
 
@@ -16,10 +16,7 @@ class ProcessedMoviesStorage:
             movie_id: Radarr movie ID
             success: Whether processing was successful
         """
-        self.processed[movie_id] = {
-            'time': datetime.now(),
-            'success': success
-        }
+        self.processed[movie_id] = {"time": datetime.now(), "success": success}
 
     def should_skip(self, movie_id: int, retry_hours: int = 24) -> bool:
         """
@@ -38,11 +35,11 @@ class ProcessedMoviesStorage:
         entry = self.processed[movie_id]
 
         # Always skip successful movies
-        if entry['success']:
+        if entry["success"]:
             return True
 
         # Skip recent failures
-        hours_since = (datetime.now() - entry['time']).total_seconds() / 3600
+        hours_since = (datetime.now() - entry["time"]).total_seconds() / 3600
         return hours_since < retry_hours
 
     def get_stats(self) -> dict[str, int]:
@@ -52,11 +49,7 @@ class ProcessedMoviesStorage:
         Returns:
             Dict with total, successful, and failed counts
         """
-        successful = sum(1 for entry in self.processed.values() if entry['success'])
-        failed = sum(1 for entry in self.processed.values() if not entry['success'])
+        successful = sum(1 for entry in self.processed.values() if entry["success"])
+        failed = sum(1 for entry in self.processed.values() if not entry["success"])
 
-        return {
-            'total': len(self.processed),
-            'successful': successful,
-            'failed': failed
-        }
+        return {"total": len(self.processed), "successful": successful, "failed": failed}

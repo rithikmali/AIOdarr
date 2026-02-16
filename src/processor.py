@@ -26,7 +26,7 @@ class MovieProcessor:
         logger.info(f"Found {len(wanted)} wanted movies")
 
         for movie in wanted:
-            movie_id = movie['id']
+            movie_id = movie["id"]
 
             # Skip if recently processed
             if self.storage.should_skip(movie_id, self.config.retry_failed_hours):
@@ -37,9 +37,11 @@ class MovieProcessor:
 
         # Log statistics
         stats = self.storage.get_stats()
-        logger.info(f"Statistics - Total: {stats['total']}, "
-                   f"Successful: {stats['successful']}, "
-                   f"Failed: {stats['failed']}")
+        logger.info(
+            f"Statistics - Total: {stats['total']}, "
+            f"Successful: {stats['successful']}, "
+            f"Failed: {stats['failed']}"
+        )
 
     def _process_movie(self, movie: dict[str, Any]) -> bool:
         """
@@ -51,10 +53,10 @@ class MovieProcessor:
         Returns:
             True if successfully added to Real-Debrid, False otherwise
         """
-        movie_id = movie['id']
-        title = movie['title']
-        year = movie.get('year', '')
-        imdb_id = movie.get('imdbId', '')
+        movie_id = movie["id"]
+        title = movie["title"]
+        year = movie.get("year", "")
+        imdb_id = movie.get("imdbId", "")
 
         if not imdb_id:
             logger.warning(f"No IMDB ID for {title} ({year}), skipping")
@@ -76,12 +78,12 @@ class MovieProcessor:
         logger.info(f"Trying stream: {stream['title']}")
 
         # Trigger AIOStreams playback URL to add to Real-Debrid
-        if not stream.get('url'):
+        if not stream.get("url"):
             logger.error(f"Stream has no playback URL for {title}")
             self.storage.mark_processed(movie_id, success=False)
             return False
 
-        success = self._trigger_aiostreams_download(stream['url'], title)
+        success = self._trigger_aiostreams_download(stream["url"], title)
         if success:
             logger.info(f"✓ Successfully triggered {title} via AIOStreams")
             # Unmonitor the movie in Radarr

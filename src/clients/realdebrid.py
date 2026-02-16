@@ -1,6 +1,5 @@
 import logging
 import time
-from typing import Optional
 
 import requests
 
@@ -12,10 +11,10 @@ class RealDebridClient:
 
     def __init__(self, api_key: str):
         self.api_key = api_key
-        self.base_url = 'https://api.real-debrid.com/rest/1.0'
-        self.headers = {'Authorization': f'Bearer {api_key}'}
+        self.base_url = "https://api.real-debrid.com/rest/1.0"
+        self.headers = {"Authorization": f"Bearer {api_key}"}
 
-    def add_magnet(self, magnet_or_infohash: str) -> Optional[str]:
+    def add_magnet(self, magnet_or_infohash: str) -> str | None:
         """
         Add a magnet/torrent to Real-Debrid
 
@@ -26,40 +25,37 @@ class RealDebridClient:
             Torrent ID if successful, None otherwise
         """
         # Convert infohash to magnet if needed
-        if not magnet_or_infohash.startswith('magnet:'):
-            magnet = f'magnet:?xt=urn:btih:{magnet_or_infohash}'
+        if not magnet_or_infohash.startswith("magnet:"):
+            magnet = f"magnet:?xt=urn:btih:{magnet_or_infohash}"
         else:
             magnet = magnet_or_infohash
 
         try:
             # Step 1: Add magnet to Real-Debrid
             response = requests.post(
-                f'{self.base_url}/torrents/addMagnet',
-                headers=self.headers,
-                data={'magnet': magnet}
+                f"{self.base_url}/torrents/addMagnet", headers=self.headers, data={"magnet": magnet}
             )
             response.raise_for_status()
             torrent_info = response.json()
-            torrent_id = torrent_info['id']
+            torrent_id = torrent_info["id"]
 
             logger.info(f"Added magnet to Real-Debrid: {torrent_id}")
 
             # Step 2: Wait briefly and get torrent info
             time.sleep(2)
             response = requests.get(
-                f'{self.base_url}/torrents/info/{torrent_id}',
-                headers=self.headers
+                f"{self.base_url}/torrents/info/{torrent_id}", headers=self.headers
             )
             response.raise_for_status()
             info = response.json()
 
             # Step 3: Select all files if needed
-            if info['status'] == 'waiting_files_selection':
-                file_ids = ','.join([str(f['id']) for f in info['files']])
+            if info["status"] == "waiting_files_selection":
+                file_ids = ",".join([str(f["id"]) for f in info["files"]])
                 requests.post(
-                    f'{self.base_url}/torrents/selectFiles/{torrent_id}',
+                    f"{self.base_url}/torrents/selectFiles/{torrent_id}",
                     headers=self.headers,
-                    data={'files': file_ids}
+                    data={"files": file_ids},
                 )
                 logger.info(f"Selected all files for torrent {torrent_id}")
 
@@ -69,7 +65,7 @@ class RealDebridClient:
             logger.error(f"Error adding to Real-Debrid: {e}")
             return None
 
-    def check_torrent_status(self, torrent_id: str) -> Optional[str]:
+    def check_torrent_status(self, torrent_id: str) -> str | None:
         """
         Check torrent download status
 
@@ -81,12 +77,11 @@ class RealDebridClient:
         """
         try:
             response = requests.get(
-                f'{self.base_url}/torrents/info/{torrent_id}',
-                headers=self.headers
+                f"{self.base_url}/torrents/info/{torrent_id}", headers=self.headers
             )
             response.raise_for_status()
             info = response.json()
-            return info['status']
+            return info["status"]
         except Exception as e:
             logger.error(f"Error checking torrent status: {e}")
             return None

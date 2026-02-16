@@ -1,5 +1,5 @@
 import logging
-from typing import Any, Optional
+from typing import Any
 
 from src.clients.aiostreams import AIOStreamsClient
 from src.clients.radarr import RadarrClient
@@ -19,12 +19,12 @@ class MediaProcessor:
         self.storage = ProcessedMoviesStorage()
 
         # Initialize clients based on configuration
-        self.radarr: Optional[RadarrClient] = None
+        self.radarr: RadarrClient | None = None
         if config.radarr_enabled:
             self.radarr = RadarrClient(config.radarr_url, config.radarr_api_key)
             logger.info("Radarr client initialized")
 
-        self.sonarr: Optional[SonarrClient] = None
+        self.sonarr: SonarrClient | None = None
         if config.sonarr_enabled:
             self.sonarr = SonarrClient(config.sonarr_url, config.sonarr_api_key)
             logger.info("Sonarr client initialized")
@@ -39,9 +39,11 @@ class MediaProcessor:
 
         # Log statistics
         stats = self.storage.get_stats()
-        logger.info(f"Statistics - Total: {stats['total']}, "
-                   f"Successful: {stats['successful']}, "
-                   f"Failed: {stats['failed']}")
+        logger.info(
+            f"Statistics - Total: {stats['total']}, "
+            f"Successful: {stats['successful']}, "
+            f"Failed: {stats['failed']}"
+        )
 
     def process_wanted_movies(self) -> None:
         """Process all wanted movies from Radarr"""
@@ -53,7 +55,7 @@ class MediaProcessor:
         logger.info(f"Found {len(wanted)} wanted movies")
 
         for movie in wanted:
-            movie_id = movie['id']
+            movie_id = movie["id"]
 
             # Skip if recently processed
             if self.storage.should_skip(movie_id, self.config.retry_failed_hours):
@@ -72,7 +74,7 @@ class MediaProcessor:
         logger.info(f"Found {len(wanted)} wanted episodes")
 
         for episode in wanted:
-            episode_id = episode['id']
+            episode_id = episode["id"]
 
             # Skip if recently processed (using same storage for simplicity)
             # In production, you might want separate storage for episodes
@@ -85,10 +87,10 @@ class MediaProcessor:
 
     def _process_movie(self, movie: dict[str, Any]) -> bool:
         """Process a single movie"""
-        movie_id = movie['id']
-        title = movie['title']
-        year = movie.get('year', '')
-        imdb_id = movie.get('imdbId', '')
+        movie_id = movie["id"]
+        title = movie["title"]
+        year = movie.get("year", "")
+        imdb_id = movie.get("imdbId", "")
 
         if not imdb_id:
             logger.warning(f"No IMDB ID for {title} ({year}), skipping")
@@ -110,12 +112,12 @@ class MediaProcessor:
         logger.info(f"Trying stream: {stream['title']}")
 
         # Trigger AIOStreams playback URL to add to Real-Debrid
-        if not stream.get('url'):
+        if not stream.get("url"):
             logger.error(f"Stream has no playback URL for {title}")
             self.storage.mark_processed(movie_id, success=False)
             return False
 
-        success = self._trigger_aiostreams_download(stream['url'], f"{title} ({year})")
+        success = self._trigger_aiostreams_download(stream["url"], f"{title} ({year})")
         if success:
             logger.info(f"✓ Successfully triggered {title} via AIOStreams")
             # Unmonitor the movie in Radarr
@@ -130,16 +132,16 @@ class MediaProcessor:
 
     def _process_episode(self, episode: dict[str, Any]) -> bool:
         """Process a single TV episode"""
-        episode_id = episode['id']
-        series = episode.get('series', {})
-        series_title = series.get('title', 'Unknown Series')
-        season_number = episode.get('seasonNumber', 0)
-        episode_number = episode.get('episodeNumber', 0)
-        title = episode.get('title', '')
+        episode_id = episode["id"]
+        series = episode.get("series", {})
+        series_title = series.get("title", "Unknown Series")
+        season_number = episode.get("seasonNumber", 0)
+        episode_number = episode.get("episodeNumber", 0)
+        title = episode.get("title", "")
 
         # Get IMDB or TVDB ID from series
-        imdb_id = series.get('imdbId', '')
-        tvdb_id = series.get('tvdbId', '')
+        imdb_id = series.get("imdbId", "")
+        tvdb_id = series.get("tvdbId", "")
 
         if not imdb_id and not tvdb_id:
             logger.warning(f"No IMDB/TVDB ID for {series_title}, skipping")
@@ -170,12 +172,12 @@ class MediaProcessor:
         stream = streams[0]
         logger.info(f"Trying stream: {stream['title']}")
 
-        if not stream.get('url'):
+        if not stream.get("url"):
             logger.error(f"Stream has no playback URL for {episode_label}")
             self.storage.mark_processed(f"episode_{episode_id}", success=False)
             return False
 
-        success = self._trigger_aiostreams_download(stream['url'], episode_label)
+        success = self._trigger_aiostreams_download(stream["url"], episode_label)
         if success:
             logger.info(f"✓ Successfully triggered {episode_label} via AIOStreams")
             # Unmonitor the episode in Sonarr

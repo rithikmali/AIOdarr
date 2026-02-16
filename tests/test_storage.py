@@ -1,5 +1,7 @@
-import pytest
 from datetime import datetime, timedelta
+
+import pytest
+
 from src.storage import ProcessedMoviesStorage
 
 
@@ -18,8 +20,8 @@ def test_mark_success(storage):
     storage.mark_processed(1, success=True)
 
     assert 1 in storage.processed
-    assert storage.processed[1]['success'] is True
-    assert isinstance(storage.processed[1]['time'], datetime)
+    assert storage.processed[1]["success"] is True
+    assert isinstance(storage.processed[1]["time"], datetime)
 
 
 def test_mark_failed(storage):
@@ -27,7 +29,7 @@ def test_mark_failed(storage):
     storage.mark_processed(2, success=False)
 
     assert 2 in storage.processed
-    assert storage.processed[2]['success'] is False
+    assert storage.processed[2]["success"] is False
 
 
 def test_should_skip_successful_movie(storage):
@@ -49,7 +51,7 @@ def test_should_not_skip_old_failure(storage):
     storage.mark_processed(3, success=False)
 
     # Manually set time to 25 hours ago
-    storage.processed[3]['time'] = datetime.now() - timedelta(hours=25)
+    storage.processed[3]["time"] = datetime.now() - timedelta(hours=25)
 
     assert storage.should_skip(3, retry_hours=24) is False
 
@@ -67,6 +69,6 @@ def test_get_stats(storage):
 
     stats = storage.get_stats()
 
-    assert stats['total'] == 3
-    assert stats['successful'] == 2
-    assert stats['failed'] == 1
+    assert stats["total"] == 3
+    assert stats["successful"] == 2
+    assert stats["failed"] == 1
