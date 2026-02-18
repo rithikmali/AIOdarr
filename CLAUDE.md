@@ -36,10 +36,10 @@ AIODarr polls Radarr/Sonarr for wanted media, searches AIOStreams for cached Rea
 **Flow**: `main.py` (scheduler) → `MediaProcessor` (orchestrator) → clients (`RadarrClient`, `SonarrClient`, `AIOStreamsClient`) + `ProcessedMoviesStorage` (in-memory retry tracking)
 
 - `src/config.py` — Loads env vars. Radarr and Sonarr are independently optional (at least one required). `AIOSTREAMS_URL` is always required.
-- `src/media_processor.py` — Central orchestrator. Processes movies and episodes, triggers downloads, unmonitors after success. This replaced the old `src/processor.py` (legacy, movie-only).
+- `src/media_processor.py` — Central orchestrator. Processes movies and episodes, triggers downloads, unmonitors after success.
 - `src/clients/aiostreams.py` — Queries AIOStreams Stremio API. Stream filtering happens in `_filter_streams`: requires cached indicator (`⚡`/`RD+`/`[RD]` in `name` field) AND `videoHash` in `behaviorHints`. Quality parsed from `description` field.
 - `src/clients/radarr.py` / `src/clients/sonarr.py` — Radarr/Sonarr v3 API clients.
-- `src/clients/realdebrid.py` — Legacy, no longer used by MediaProcessor.
+- `src/clients/realdebrid.py` — Optional Real-Debrid verification client. Used by `MediaProcessor` to confirm a torrent appeared in RD after triggering the AIOStreams HEAD request. Only active when `REALDEBRID_API_KEY` is set.
 - `src/storage.py` — In-memory dict tracking processed items with timestamps. Episodes use `episode_{id}` composite keys.
 
 **AIOStreams API endpoints**:
