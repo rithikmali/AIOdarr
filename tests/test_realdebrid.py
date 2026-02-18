@@ -135,6 +135,7 @@ def test_list_torrents_returns_torrent_list(mock_get, rd_client):
     mock_get.assert_called_once_with(
         "https://api.real-debrid.com/rest/1.0/torrents",
         headers={"Authorization": "Bearer test_api_key"},
+        timeout=30,
     )
 
 

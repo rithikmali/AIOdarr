@@ -99,8 +99,12 @@ class RealDebridClient:
             response = requests.get(
                 f"{self.base_url}/torrents",
                 headers=self.headers,
+                timeout=30,
             )
             response.raise_for_status()
+            if not response.content:
+                logger.warning(f"RD /torrents returned HTTP {response.status_code} with empty body")
+                return None
             return response.json()
         except Exception as e:
             logger.error(f"Error listing torrents: {e}")
