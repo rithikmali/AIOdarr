@@ -139,7 +139,7 @@ class MediaProcessor:
                 )
             return False
 
-        attempts = min(3, len(streams))
+        attempts = min(self.config.max_retry_attempts, len(streams))
         logger.info(f"Found {len(streams)} cached streams, will try up to {attempts}")
 
         for i, stream in enumerate(streams[:attempts]):
@@ -303,8 +303,8 @@ class MediaProcessor:
             logger.debug("No filename for RD verification, assuming success")
             return True
 
-        logger.info(f"Waiting 5s then verifying in Real-Debrid for: {filename}")
-        time.sleep(5)
+        logger.info(f"Waiting 15s then verifying in Real-Debrid for: {filename}")
+        time.sleep(15)
 
         torrents = self.rd_client.list_torrents()
         if torrents is None:

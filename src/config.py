@@ -30,6 +30,7 @@ class Config:
         self.discord_webhook_url = os.getenv("DISCORD_WEBHOOK_URL", "")
         self.realdebrid_api_key = os.getenv("REALDEBRID_API_KEY", "")
         self.log_level = os.getenv("LOG_LEVEL", "INFO")
+        self.max_retry_attempts = int(os.getenv("MAX_RETRY_ATTEMPTS", "3"))
 
         self.aiostreams_url = self.aiostreams_url.rstrip("/")
 
