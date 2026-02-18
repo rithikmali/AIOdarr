@@ -1,8 +1,10 @@
 import logging
+import time
 from typing import Any
 
 from src.clients.aiostreams import AIOStreamsClient
 from src.clients.radarr import RadarrClient
+from src.clients.realdebrid import RealDebridClient
 from src.clients.sonarr import SonarrClient
 from src.config import Config
 from src.notifiers.discord import DiscordNotifier
@@ -35,6 +37,12 @@ class MediaProcessor:
         if config.discord_webhook_url:
             self.notifier = DiscordNotifier(config.discord_webhook_url)
             logger.info("Discord notifier initialized")
+
+        # Initialize Real-Debrid client for stream verification if configured
+        self.rd_client: RealDebridClient | None = None
+        if config.realdebrid_api_key:
+            self.rd_client = RealDebridClient(config.realdebrid_api_key)
+            logger.info("Real-Debrid client initialized for stream verification")
 
     def process_all(self) -> None:
         """Process both movies and TV shows"""
@@ -293,6 +301,47 @@ class MediaProcessor:
                 reason="Download trigger failed",
                 details={"imdb_id": imdb_id, "stream_url": stream["url"]},
             )
+        return False
+
+    def _try_stream(self, stream: dict[str, Any], label: str) -> bool:
+        """
+        Trigger a single stream and verify it was added to Real-Debrid.
+
+        Args:
+            stream: Stream dict with 'url', 'filename', 'title' keys
+            label: Human-readable label for logging
+
+        Returns:
+            True if stream was successfully triggered and verified, False otherwise
+        """
+        url = stream.get("url")
+        if not url:
+            logger.debug(f"Stream has no playback URL, skipping: {stream.get('title', '')}")
+            return False
+
+        if not self._trigger_aiostreams_download(url, label):
+            return False
+
+        if not self.rd_client:
+            return True
+
+        filename = stream.get("filename", "")
+        if not filename:
+            logger.debug("No filename for RD verification, assuming success")
+            return True
+
+        logger.info(f"Waiting 5s then verifying in Real-Debrid for: {filename}")
+        time.sleep(5)
+
+        torrents = self.rd_client.list_torrents()
+        filename_lower = filename.lower()
+        for torrent in torrents:
+            torrent_filename = torrent.get("filename", "").lower()
+            if filename_lower in torrent_filename or torrent_filename in filename_lower:
+                logger.info(f"Verified in Real-Debrid: {torrent.get('filename')}")
+                return True
+
+        logger.warning(f"Not found in Real-Debrid after trigger: {filename}")
         return False
 
     def _trigger_aiostreams_download(self, url: str, title: str) -> bool:

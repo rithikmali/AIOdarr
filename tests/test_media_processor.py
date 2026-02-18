@@ -508,3 +508,133 @@ def test_process_all_no_failure_summary_without_notifier(
     processor.process_all()
 
     assert processor.notifier is None
+
+
+@patch("src.media_processor.SonarrClient")
+@patch("src.media_processor.RadarrClient")
+@patch("src.media_processor.AIOStreamsClient")
+def test_try_stream_returns_true_on_trigger_success_no_rd(
+    mock_aiostreams, mock_radarr, mock_sonarr, monkeypatch
+):
+    """_try_stream returns True when trigger succeeds and no RD client configured"""
+    monkeypatch.setenv("AIOSTREAMS_URL", "http://aiostreams")
+    monkeypatch.setenv("RADARR_URL", "http://radarr")
+    monkeypatch.setenv("RADARR_API_KEY", "test-key")
+    monkeypatch.delenv("REALDEBRID_API_KEY", raising=False)
+
+    config = Config()
+    processor = MediaProcessor(config)
+
+    stream = {
+        "title": "Show S01E01 1080p",
+        "url": "http://stream-url",
+        "filename": "Show.S01E01.mkv",
+    }
+
+    with patch.object(processor, "_trigger_aiostreams_download", return_value=True):
+        result = processor._try_stream(stream, "Show S01E01")
+
+    assert result is True
+    assert processor.rd_client is None
+
+
+@patch("src.media_processor.SonarrClient")
+@patch("src.media_processor.RadarrClient")
+@patch("src.media_processor.AIOStreamsClient")
+def test_try_stream_returns_false_on_no_url(mock_aiostreams, mock_radarr, mock_sonarr, monkeypatch):
+    """_try_stream returns False immediately when stream has no URL"""
+    monkeypatch.setenv("AIOSTREAMS_URL", "http://aiostreams")
+    monkeypatch.setenv("RADARR_URL", "http://radarr")
+    monkeypatch.setenv("RADARR_API_KEY", "test-key")
+    monkeypatch.delenv("REALDEBRID_API_KEY", raising=False)
+
+    config = Config()
+    processor = MediaProcessor(config)
+
+    stream = {"title": "Show S01E01 1080p", "url": "", "filename": "Show.S01E01.mkv"}
+
+    with patch.object(processor, "_trigger_aiostreams_download") as mock_trigger:
+        result = processor._try_stream(stream, "Show S01E01")
+
+    assert result is False
+    mock_trigger.assert_not_called()
+
+
+@patch("src.media_processor.SonarrClient")
+@patch("src.media_processor.RadarrClient")
+@patch("src.media_processor.AIOStreamsClient")
+def test_try_stream_returns_true_when_rd_verifies_filename(
+    mock_aiostreams, mock_radarr, mock_sonarr, monkeypatch
+):
+    """_try_stream returns True when RD list_torrents contains matching filename"""
+    monkeypatch.setenv("AIOSTREAMS_URL", "http://aiostreams")
+    monkeypatch.setenv("RADARR_URL", "http://radarr")
+    monkeypatch.setenv("RADARR_API_KEY", "test-key")
+    monkeypatch.setenv("REALDEBRID_API_KEY", "rd-key")
+
+    config = Config()
+
+    with patch("src.media_processor.RealDebridClient") as mock_rd_class:
+        mock_rd = Mock()
+        mock_rd_class.return_value = mock_rd
+        mock_rd.list_torrents.return_value = [
+            {
+                "filename": "Shrinking S03E04 The Field 2160p ATVP WEB-DL DDP5 1 DV H 265-NTb.mkv",
+                "status": "downloaded",
+            }
+        ]
+
+        processor = MediaProcessor(config)
+
+        stream = {
+            "title": "[RD⚡️] 4K",
+            "url": "http://stream-url",
+            "filename": "Shrinking S03E04 The Field 2160p ATVP WEB-DL DDP5 1 DV H 265-NTb.mkv",
+        }
+
+        with (
+            patch.object(processor, "_trigger_aiostreams_download", return_value=True),
+            patch("time.sleep"),
+        ):
+            result = processor._try_stream(stream, "Shrinking S03E04")
+
+    assert result is True
+    mock_rd.list_torrents.assert_called_once()
+
+
+@patch("src.media_processor.SonarrClient")
+@patch("src.media_processor.RadarrClient")
+@patch("src.media_processor.AIOStreamsClient")
+def test_try_stream_returns_false_when_rd_misses_filename(
+    mock_aiostreams, mock_radarr, mock_sonarr, monkeypatch
+):
+    """_try_stream returns False when RD list_torrents does not contain matching filename"""
+    monkeypatch.setenv("AIOSTREAMS_URL", "http://aiostreams")
+    monkeypatch.setenv("RADARR_URL", "http://radarr")
+    monkeypatch.setenv("RADARR_API_KEY", "test-key")
+    monkeypatch.setenv("REALDEBRID_API_KEY", "rd-key")
+
+    config = Config()
+
+    with patch("src.media_processor.RealDebridClient") as mock_rd_class:
+        mock_rd = Mock()
+        mock_rd_class.return_value = mock_rd
+        mock_rd.list_torrents.return_value = [
+            {"filename": "Some.Other.Movie.mkv", "status": "downloaded"}
+        ]
+
+        processor = MediaProcessor(config)
+
+        stream = {
+            "title": "[RD⚡️] 4K",
+            "url": "http://stream-url",
+            "filename": "Shrinking S03E04 The Field 2160p ATVP WEB-DL DDP5 1 DV H 265-NTb.mkv",
+        }
+
+        with (
+            patch.object(processor, "_trigger_aiostreams_download", return_value=True),
+            patch("time.sleep"),
+        ):
+            result = processor._try_stream(stream, "Shrinking S03E04")
+
+    assert result is False
