@@ -307,6 +307,10 @@ class MediaProcessor:
         time.sleep(5)
 
         torrents = self.rd_client.list_torrents()
+        if torrents is None:
+            logger.warning("RD API error during verification, assuming HEAD trigger succeeded")
+            return True
+
         filename_lower = filename.lower()
         for torrent in torrents:
             torrent_filename = torrent.get("filename", "").lower()

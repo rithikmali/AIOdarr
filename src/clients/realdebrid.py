@@ -86,12 +86,14 @@ class RealDebridClient:
             logger.error(f"Error checking torrent status: {e}")
             return None
 
-    def list_torrents(self) -> list[dict]:
+    def list_torrents(self) -> list[dict] | None:
         """
         List all torrents in Real-Debrid account
 
         Returns:
-            List of torrent dicts (each has 'filename', 'hash', 'status', etc.)
+            List of torrent dicts (each has 'filename', 'hash', 'status', etc.),
+            or None if the API request failed (allows callers to distinguish
+            between an empty account and an API error)
         """
         try:
             response = requests.get(
@@ -102,4 +104,4 @@ class RealDebridClient:
             return response.json()
         except Exception as e:
             logger.error(f"Error listing torrents: {e}")
-            return []
+            return None

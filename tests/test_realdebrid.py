@@ -139,10 +139,10 @@ def test_list_torrents_returns_torrent_list(mock_get, rd_client):
 
 
 @patch("requests.get")
-def test_list_torrents_returns_empty_on_error(mock_get, rd_client):
-    """list_torrents returns empty list on API error"""
+def test_list_torrents_returns_none_on_error(mock_get, rd_client):
+    """list_torrents returns None on API error (distinguishes from empty account)"""
     mock_get.side_effect = Exception("API Error")
 
     torrents = rd_client.list_torrents()
 
-    assert torrents == []
+    assert torrents is None

@@ -643,6 +643,42 @@ def test_try_stream_returns_false_when_rd_misses_filename(
 @patch("src.media_processor.SonarrClient")
 @patch("src.media_processor.RadarrClient")
 @patch("src.media_processor.AIOStreamsClient")
+def test_try_stream_returns_true_when_rd_api_errors(
+    mock_aiostreams, mock_radarr, mock_sonarr, monkeypatch
+):
+    """_try_stream returns True when RD list_torrents errors (graceful degradation)"""
+    monkeypatch.setenv("AIOSTREAMS_URL", "http://aiostreams")
+    monkeypatch.setenv("RADARR_URL", "http://radarr")
+    monkeypatch.setenv("RADARR_API_KEY", "test-key")
+    monkeypatch.setenv("REALDEBRID_API_KEY", "rd-key")
+
+    config = Config()
+
+    with patch("src.media_processor.RealDebridClient") as mock_rd_class:
+        mock_rd = Mock()
+        mock_rd_class.return_value = mock_rd
+        mock_rd.list_torrents.return_value = None  # API error
+
+        processor = MediaProcessor(config)
+
+        stream = {
+            "title": "[RD⚡️] 4K",
+            "url": "http://stream-url",
+            "filename": "Shrinking S03E04 The Field 2160p ATVP WEB-DL DDP5 1 DV H 265-NTb.mkv",
+        }
+
+        with (
+            patch.object(processor, "_trigger_aiostreams_download", return_value=True),
+            patch("time.sleep"),
+        ):
+            result = processor._try_stream(stream, "Shrinking S03E04")
+
+    assert result is True
+
+
+@patch("src.media_processor.SonarrClient")
+@patch("src.media_processor.RadarrClient")
+@patch("src.media_processor.AIOStreamsClient")
 def test_process_movie_retries_and_succeeds_on_second_stream(
     mock_aiostreams_class, mock_radarr_class, mock_sonarr, monkeypatch
 ):
