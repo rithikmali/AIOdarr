@@ -93,3 +93,39 @@ def test_parse_quality_720p(aio_client):
 def test_parse_quality_default(aio_client):
     """Test quality parsing defaults to 480"""
     assert aio_client._parse_quality("Movie DVDRip") == 480
+
+
+def test_filter_streams_includes_cached_stream_without_video_hash(aio_client):
+    """Streams with cached indicator but no videoHash must be included after fix"""
+    streams = [
+        {
+            "name": "    [RD⚡️]\n    4K🔥UHD",
+            "description": "    🎬 Shrinking S03 • E04\n    🖥 ᴡᴇʙ-ᴅʟ | 2160p",
+            "url": "https://aiostreams.elfhosted.com/playback/test",
+            "behaviorHints": {
+                "filename": "Shrinking S03E04 The Field 2160p ATVP WEB-DL DDP5 1 DV H 265-NTb.mkv",
+                "videoSize": 6697557046,
+            },
+        }
+    ]
+    result = aio_client._filter_streams(streams)
+    assert len(result) == 1
+    assert (
+        result[0]["filename"]
+        == "Shrinking S03E04 The Field 2160p ATVP WEB-DL DDP5 1 DV H 265-NTb.mkv"
+    )
+
+
+def test_filter_streams_captures_empty_filename_when_absent(aio_client):
+    """filename defaults to empty string when behaviorHints has no filename"""
+    streams = [
+        {
+            "name": "[RD+] Movie 1080p",
+            "description": "1080p",
+            "url": "https://example.com/playback/test",
+            "behaviorHints": {"videoHash": "abc123"},
+        }
+    ]
+    result = aio_client._filter_streams(streams)
+    assert len(result) == 1
+    assert result[0]["filename"] == ""

@@ -80,7 +80,7 @@ class AIOStreamsClient:
             return []
 
     def _filter_streams(self, streams: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        """Filter streams for cached Real-Debrid results with videoHash."""
+        """Filter streams for cached Real-Debrid results."""
         cached_streams = []
         for stream in streams:
             # AIOStreams uses 'name' field, fallback to 'title'
@@ -91,17 +91,13 @@ class AIOStreamsClient:
             if not ("⚡" in title or "RD+" in title or "[RD]" in title):
                 continue
 
-            # Only keep streams that have videoHash in behaviorHints
             behavior_hints = stream.get("behaviorHints", {})
-            if not behavior_hints or not behavior_hints.get("videoHash"):
-                logger.debug(f"Skipping stream without videoHash: {title}")
-                continue
-
             cached_streams.append(
                 {
                     "title": title,
                     "url": stream.get("url"),
                     "infoHash": stream.get("infoHash"),
+                    "filename": behavior_hints.get("filename", ""),
                     "quality": self._parse_quality(description or title),
                 }
             )
