@@ -28,6 +28,7 @@ class Config:
         self.poll_interval_minutes = int(os.getenv("POLL_INTERVAL_MINUTES", "10"))
         self.retry_failed_hours = int(os.getenv("RETRY_FAILED_HOURS", "24"))
         self.discord_webhook_url = os.getenv("DISCORD_WEBHOOK_URL", "")
+        self.realdebrid_api_key = os.getenv("REALDEBRID_API_KEY", "")
         self.log_level = os.getenv("LOG_LEVEL", "INFO")
 
         self.aiostreams_url = self.aiostreams_url.rstrip("/")
