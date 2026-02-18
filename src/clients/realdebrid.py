@@ -14,6 +14,16 @@ class RealDebridClient:
         self.base_url = "https://api.real-debrid.com/rest/1.0"
         self.headers = {"Authorization": f"Bearer {api_key}"}
 
+    def _log_curl(self, method: str, url: str, data: dict | None = None) -> None:
+        """Log the equivalent curl command, redacting the Bearer token."""
+        parts = ["curl", "-X", method, "--max-time 30"]
+        parts.append("-H 'Authorization: Bearer ***'")
+        if data:
+            for key, value in data.items():
+                parts.append(f"--data-urlencode '{key}={value}'")
+        parts.append(f"'{url}'")
+        logger.info(f"Equivalent curl command:\n  {' '.join(parts)}")
+
     def add_magnet(self, magnet_or_infohash: str) -> str | None:
         """
         Add a magnet/torrent to Real-Debrid
@@ -95,9 +105,11 @@ class RealDebridClient:
             or None if the API request failed (allows callers to distinguish
             between an empty account and an API error)
         """
+        url = f"{self.base_url}/torrents"
+        self._log_curl("GET", url)
         try:
             response = requests.get(
-                f"{self.base_url}/torrents",
+                url,
                 headers=self.headers,
                 timeout=30,
             )
