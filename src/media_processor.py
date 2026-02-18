@@ -235,7 +235,7 @@ class MediaProcessor:
                 )
             return False
 
-        attempts = min(3, len(streams))
+        attempts = min(self.config.max_retry_attempts, len(streams))
         logger.info(f"Found {len(streams)} cached streams, will try up to {attempts}")
 
         for i, stream in enumerate(streams[:attempts]):

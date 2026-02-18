@@ -819,6 +819,7 @@ def test_process_episode_fails_after_max_retries(
     monkeypatch.setenv("SONARR_API_KEY", "test-key")
     monkeypatch.delenv("DISCORD_WEBHOOK_URL", raising=False)
     monkeypatch.delenv("REALDEBRID_API_KEY", raising=False)
+    monkeypatch.setenv("MAX_RETRY_ATTEMPTS", 3)
 
     config = Config()
 
