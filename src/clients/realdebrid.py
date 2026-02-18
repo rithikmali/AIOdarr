@@ -85,3 +85,21 @@ class RealDebridClient:
         except Exception as e:
             logger.error(f"Error checking torrent status: {e}")
             return None
+
+    def list_torrents(self) -> list[dict]:
+        """
+        List all torrents in Real-Debrid account
+
+        Returns:
+            List of torrent dicts (each has 'filename', 'hash', 'status', etc.)
+        """
+        try:
+            response = requests.get(
+                f"{self.base_url}/torrents",
+                headers=self.headers,
+            )
+            response.raise_for_status()
+            return response.json()
+        except Exception as e:
+            logger.error(f"Error listing torrents: {e}")
+            return []

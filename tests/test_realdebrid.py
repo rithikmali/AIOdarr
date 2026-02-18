@@ -102,3 +102,47 @@ def test_check_torrent_status(mock_get, rd_client):
         "https://api.real-debrid.com/rest/1.0/torrents/info/rd_torrent_123",
         headers={"Authorization": "Bearer test_api_key"},
     )
+
+
+@patch("requests.get")
+def test_list_torrents_returns_torrent_list(mock_get, rd_client):
+    """list_torrents returns list of torrent dicts from RD API"""
+    mock_response = Mock()
+    mock_response.json.return_value = [
+        {
+            "id": "abc123",
+            "filename": "Shrinking S03E04 The Field 2160p ATVP WEB-DL DDP5 1 DV H 265-NTb.mkv",
+            "hash": "deadbeef",
+            "status": "downloaded",
+        },
+        {
+            "id": "def456",
+            "filename": "Breaking Bad S01E01 1080p WEB-DL.mkv",
+            "hash": "cafebabe",
+            "status": "downloaded",
+        },
+    ]
+    mock_response.raise_for_status = Mock()
+    mock_get.return_value = mock_response
+
+    torrents = rd_client.list_torrents()
+
+    assert len(torrents) == 2
+    assert (
+        torrents[0]["filename"]
+        == "Shrinking S03E04 The Field 2160p ATVP WEB-DL DDP5 1 DV H 265-NTb.mkv"
+    )
+    mock_get.assert_called_once_with(
+        "https://api.real-debrid.com/rest/1.0/torrents",
+        headers={"Authorization": "Bearer test_api_key"},
+    )
+
+
+@patch("requests.get")
+def test_list_torrents_returns_empty_on_error(mock_get, rd_client):
+    """list_torrents returns empty list on API error"""
+    mock_get.side_effect = Exception("API Error")
+
+    torrents = rd_client.list_torrents()
+
+    assert torrents == []
