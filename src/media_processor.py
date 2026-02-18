@@ -139,53 +139,37 @@ class MediaProcessor:
                 )
             return False
 
-        # Use first stream from AIOStreams (pre-sorted by their algorithm)
-        logger.info(f"Found {len(streams)} cached streams, using first one")
-        stream = streams[0]
-        logger.info(f"Trying stream: {stream['title']}")
+        attempts = min(3, len(streams))
+        logger.info(f"Found {len(streams)} cached streams, will try up to {attempts}")
 
-        # Trigger AIOStreams playback URL to add to Real-Debrid
-        if not stream.get("url"):
-            logger.error(f"Stream has no playback URL for {title}")
-            self.storage.mark_processed(movie_id, success=False)
-            if self.notifier:
-                self.notifier.collect_failure(
-                    media_type="movie",
-                    title=f"{title} ({year})",
-                    reason="No playback URL in stream",
-                    details={"imdb_id": imdb_id},
-                )
-            return False
+        for i, stream in enumerate(streams[:attempts]):
+            logger.info(f"Attempt {i + 1}/{attempts}: {stream['title']}")
+            if self._try_stream(stream, f"{title} ({year})"):
+                logger.info(f"✓ Successfully triggered {title} via AIOStreams")
+                if self.radarr and self.radarr.unmonitor_movie(movie_id):
+                    logger.info(f"Unmonitored {title} in Radarr")
+                self.storage.mark_processed(movie_id, success=True)
+                if self.notifier:
+                    self.notifier.notify_success(
+                        media_type="movie",
+                        title=f"{title} ({year})",
+                        details={
+                            "year": year,
+                            "imdb_id": imdb_id,
+                            "quality": stream.get("quality", "Unknown"),
+                            "stream_title": stream.get("title", ""),
+                        },
+                    )
+                return True
 
-        success = self._trigger_aiostreams_download(stream["url"], f"{title} ({year})")
-        if success:
-            logger.info(f"✓ Successfully triggered {title} via AIOStreams")
-            # Unmonitor the movie in Radarr
-            if self.radarr and self.radarr.unmonitor_movie(movie_id):
-                logger.info(f"Unmonitored {title} in Radarr")
-            self.storage.mark_processed(movie_id, success=True)
-            # Notify Discord of success
-            if self.notifier:
-                self.notifier.notify_success(
-                    media_type="movie",
-                    title=f"{title} ({year})",
-                    details={
-                        "year": year,
-                        "imdb_id": imdb_id,
-                        "quality": stream.get("description", "Unknown"),
-                        "stream_title": stream.get("title", ""),
-                    },
-                )
-            return True
-
-        logger.error(f"Failed to trigger download for {title}")
+        logger.error(f"All {attempts} stream attempts failed for {title}")
         self.storage.mark_processed(movie_id, success=False)
         if self.notifier:
             self.notifier.collect_failure(
                 media_type="movie",
                 title=f"{title} ({year})",
-                reason="Download trigger failed",
-                details={"imdb_id": imdb_id, "stream_url": stream["url"]},
+                reason=f"All {attempts} stream attempts failed",
+                details={"imdb_id": imdb_id},
             )
         return False
 

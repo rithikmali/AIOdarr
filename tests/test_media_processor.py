@@ -205,7 +205,7 @@ def test_process_movie_calls_collect_failure_on_no_playback_url(
         mock_notifier.collect_failure.assert_called_once()
 
         call_args = mock_notifier.collect_failure.call_args
-        assert "No playback URL" in call_args[1]["reason"]
+        assert "stream attempts failed" in call_args[1]["reason"]
 
 
 @patch("src.media_processor.SonarrClient")
@@ -246,7 +246,7 @@ def test_process_movie_calls_collect_failure_on_download_failed(
             mock_notifier.collect_failure.assert_called_once()
 
             call_args = mock_notifier.collect_failure.call_args
-            assert "Download trigger failed" in call_args[1]["reason"]
+            assert "stream attempts failed" in call_args[1]["reason"]
 
 
 @patch("src.media_processor.SonarrClient")
@@ -638,3 +638,85 @@ def test_try_stream_returns_false_when_rd_misses_filename(
             result = processor._try_stream(stream, "Shrinking S03E04")
 
     assert result is False
+
+
+@patch("src.media_processor.SonarrClient")
+@patch("src.media_processor.RadarrClient")
+@patch("src.media_processor.AIOStreamsClient")
+def test_process_movie_retries_and_succeeds_on_second_stream(
+    mock_aiostreams_class, mock_radarr_class, mock_sonarr, monkeypatch
+):
+    """_process_movie tries next stream if first fails verification"""
+    monkeypatch.setenv("AIOSTREAMS_URL", "http://aiostreams")
+    monkeypatch.setenv("RADARR_URL", "http://radarr")
+    monkeypatch.setenv("RADARR_API_KEY", "test-key")
+    monkeypatch.delenv("DISCORD_WEBHOOK_URL", raising=False)
+    monkeypatch.delenv("REALDEBRID_API_KEY", raising=False)
+
+    config = Config()
+
+    mock_radarr = mock_radarr_class.return_value
+    mock_radarr.unmonitor_movie.return_value = True
+
+    mock_aiostreams = mock_aiostreams_class.return_value
+    mock_aiostreams.search_movie.return_value = [
+        {"title": "Movie 4K", "url": "http://stream-1", "filename": "Movie.4K.mkv"},
+        {"title": "Movie 1080p", "url": "http://stream-2", "filename": "Movie.1080p.mkv"},
+    ]
+
+    processor = MediaProcessor(config)
+
+    # First stream fails, second succeeds
+    call_count = 0
+
+    def mock_try_stream(stream, label):
+        nonlocal call_count
+        call_count += 1
+        return call_count == 2  # Second call returns True
+
+    with patch.object(processor, "_try_stream", side_effect=mock_try_stream):
+        movie = {"id": 1, "title": "Movie", "year": 2024, "imdbId": "tt1234567"}
+        result = processor._process_movie(movie)
+
+    assert result is True
+    assert call_count == 2
+    mock_radarr.unmonitor_movie.assert_called_once_with(1)
+
+
+@patch("src.media_processor.SonarrClient")
+@patch("src.media_processor.RadarrClient")
+@patch("src.media_processor.AIOStreamsClient")
+def test_process_movie_fails_after_max_retries(
+    mock_aiostreams_class, mock_radarr_class, mock_sonarr, monkeypatch
+):
+    """_process_movie fails after trying all available streams (up to 3)"""
+    monkeypatch.setenv("AIOSTREAMS_URL", "http://aiostreams")
+    monkeypatch.setenv("RADARR_URL", "http://radarr")
+    monkeypatch.setenv("RADARR_API_KEY", "test-key")
+    monkeypatch.delenv("DISCORD_WEBHOOK_URL", raising=False)
+    monkeypatch.delenv("REALDEBRID_API_KEY", raising=False)
+
+    config = Config()
+    mock_aiostreams = mock_aiostreams_class.return_value
+    mock_aiostreams.search_movie.return_value = [
+        {"title": "Movie 4K", "url": "http://stream-1", "filename": "Movie.4K.mkv"},
+        {"title": "Movie 1080p", "url": "http://stream-2", "filename": "Movie.1080p.mkv"},
+        {"title": "Movie 720p", "url": "http://stream-3", "filename": "Movie.720p.mkv"},
+        {"title": "Movie 480p", "url": "http://stream-4", "filename": "Movie.480p.mkv"},
+    ]
+
+    processor = MediaProcessor(config)
+
+    call_count = 0
+
+    def mock_try_stream(stream, label):
+        nonlocal call_count
+        call_count += 1
+        return False  # All fail
+
+    with patch.object(processor, "_try_stream", side_effect=mock_try_stream):
+        movie = {"id": 1, "title": "Movie", "year": 2024, "imdbId": "tt1234567"}
+        result = processor._process_movie(movie)
+
+    assert result is False
+    assert call_count == 3  # Capped at 3, not 4
