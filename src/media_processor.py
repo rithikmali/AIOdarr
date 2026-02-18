@@ -235,55 +235,44 @@ class MediaProcessor:
                 )
             return False
 
-        # Use first stream
-        logger.info(f"Found {len(streams)} cached streams, using first one")
-        stream = streams[0]
-        logger.info(f"Trying stream: {stream['title']}")
+        attempts = min(3, len(streams))
+        logger.info(f"Found {len(streams)} cached streams, will try up to {attempts}")
 
-        if not stream.get("url"):
-            logger.error(f"Stream has no playback URL for {episode_label}")
-            self.storage.mark_processed(f"episode_{episode_id}", success=False)
-            if self.notifier:
-                self.notifier.collect_failure(
-                    media_type="episode",
-                    title=episode_label,
-                    reason="No playback URL in stream",
-                    details={"imdb_id": imdb_id},
-                )
-            return False
+        for i, stream in enumerate(streams[:attempts]):
+            logger.info(f"Attempt {i + 1}/{attempts}: {stream['title']}")
+            if self._try_stream(stream, episode_label):
+                logger.info(f"✓ Successfully triggered {episode_label} via AIOStreams")
+                if self.sonarr and self.sonarr.unmonitor_episode(episode_id):
+                    logger.info(f"Unmonitored {episode_label} in Sonarr")
+                self.storage.mark_processed(f"episode_{episode_id}", success=True)
+                if self.notifier:
+                    self.notifier.notify_success(
+                        media_type="episode",
+                        title=episode_label,
+                        details={
+                            "series_title": series_title,
+                            "season": season_number,
+                            "episode": episode_number,
+                            "episode_title": title,
+                            "imdb_id": imdb_id,
+                            "quality": stream.get("quality", "Unknown"),
+                            "stream_title": stream.get("title", ""),
+                        },
+                    )
+                return True
 
-        success = self._trigger_aiostreams_download(stream["url"], episode_label)
-        if success:
-            logger.info(f"✓ Successfully triggered {episode_label} via AIOStreams")
-            # Unmonitor the episode in Sonarr
-            if self.sonarr and self.sonarr.unmonitor_episode(episode_id):
-                logger.info(f"Unmonitored {episode_label} in Sonarr")
-            self.storage.mark_processed(f"episode_{episode_id}", success=True)
-            # Notify Discord of success
-            if self.notifier:
-                self.notifier.notify_success(
-                    media_type="episode",
-                    title=episode_label,
-                    details={
-                        "series_title": series_title,
-                        "season": season_number,
-                        "episode": episode_number,
-                        "episode_title": title,
-                        "imdb_id": imdb_id,
-                        "quality": stream.get("description", "Unknown"),
-                        "stream_title": stream.get("title", ""),
-                    },
-                )
-            return True
-
-        logger.error(f"Failed to trigger download for {episode_label}")
+        logger.error(f"All {attempts} stream attempts failed for {episode_label}")
         self.storage.mark_processed(f"episode_{episode_id}", success=False)
         if self.notifier:
             self.notifier.collect_failure(
                 media_type="episode",
                 title=episode_label,
-                reason="Download trigger failed",
-                details={"imdb_id": imdb_id, "stream_url": stream["url"]},
+                reason=f"All {attempts} stream attempts failed",
+                details={
+                    "imdb_id": imdb_id,
+                    "season": season_number,
+                    "episode": episode_number,
+                },
             )
         return False
 

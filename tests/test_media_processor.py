@@ -414,7 +414,7 @@ def test_process_episode_calls_collect_failure_on_no_playback_url(
         mock_notifier.collect_failure.assert_called_once()
 
         call_args = mock_notifier.collect_failure.call_args
-        assert "No playback URL" in call_args[1]["reason"]
+        assert "stream attempts failed" in call_args[1]["reason"]
 
 
 @patch("src.media_processor.SonarrClient")
@@ -456,7 +456,7 @@ def test_process_episode_calls_collect_failure_on_download_failed(
             mock_notifier.collect_failure.assert_called_once()
 
             call_args = mock_notifier.collect_failure.call_args
-            assert "Download trigger failed" in call_args[1]["reason"]
+            assert "stream attempts failed" in call_args[1]["reason"]
 
 
 @patch("src.media_processor.SonarrClient")
@@ -720,3 +720,97 @@ def test_process_movie_fails_after_max_retries(
 
     assert result is False
     assert call_count == 3  # Capped at 3, not 4
+
+
+@patch("src.media_processor.SonarrClient")
+@patch("src.media_processor.RadarrClient")
+@patch("src.media_processor.AIOStreamsClient")
+def test_process_episode_retries_and_succeeds_on_second_stream(
+    mock_aiostreams_class, mock_radarr, mock_sonarr_class, monkeypatch
+):
+    """_process_episode tries next stream if first fails verification"""
+    monkeypatch.setenv("AIOSTREAMS_URL", "http://aiostreams")
+    monkeypatch.setenv("SONARR_URL", "http://sonarr")
+    monkeypatch.setenv("SONARR_API_KEY", "test-key")
+    monkeypatch.delenv("DISCORD_WEBHOOK_URL", raising=False)
+    monkeypatch.delenv("REALDEBRID_API_KEY", raising=False)
+
+    config = Config()
+
+    mock_sonarr = mock_sonarr_class.return_value
+    mock_sonarr.unmonitor_episode.return_value = True
+
+    mock_aiostreams = mock_aiostreams_class.return_value
+    mock_aiostreams.search_episode.return_value = [
+        {"title": "Show 4K", "url": "http://stream-1", "filename": "Show.S01E01.4K.mkv"},
+        {"title": "Show 1080p", "url": "http://stream-2", "filename": "Show.S01E01.1080p.mkv"},
+    ]
+
+    processor = MediaProcessor(config)
+
+    call_count = 0
+
+    def mock_try_stream(stream, label):
+        nonlocal call_count
+        call_count += 1
+        return call_count == 2
+
+    with patch.object(processor, "_try_stream", side_effect=mock_try_stream):
+        episode = {
+            "id": 1,
+            "seasonNumber": 1,
+            "episodeNumber": 1,
+            "title": "Pilot",
+            "series": {"title": "Breaking Bad", "imdbId": "tt0959621"},
+        }
+        result = processor._process_episode(episode)
+
+    assert result is True
+    assert call_count == 2
+    mock_sonarr.unmonitor_episode.assert_called_once_with(1)
+
+
+@patch("src.media_processor.SonarrClient")
+@patch("src.media_processor.RadarrClient")
+@patch("src.media_processor.AIOStreamsClient")
+def test_process_episode_fails_after_max_retries(
+    mock_aiostreams_class, mock_radarr, mock_sonarr_class, monkeypatch
+):
+    """_process_episode fails after trying all streams (up to 3)"""
+    monkeypatch.setenv("AIOSTREAMS_URL", "http://aiostreams")
+    monkeypatch.setenv("SONARR_URL", "http://sonarr")
+    monkeypatch.setenv("SONARR_API_KEY", "test-key")
+    monkeypatch.delenv("DISCORD_WEBHOOK_URL", raising=False)
+    monkeypatch.delenv("REALDEBRID_API_KEY", raising=False)
+
+    config = Config()
+
+    mock_aiostreams = mock_aiostreams_class.return_value
+    mock_aiostreams.search_episode.return_value = [
+        {"title": "Show 4K", "url": "http://stream-1", "filename": "Show.4K.mkv"},
+        {"title": "Show 1080p", "url": "http://stream-2", "filename": "Show.1080p.mkv"},
+        {"title": "Show 720p", "url": "http://stream-3", "filename": "Show.720p.mkv"},
+        {"title": "Show 480p", "url": "http://stream-4", "filename": "Show.480p.mkv"},
+    ]
+
+    processor = MediaProcessor(config)
+
+    call_count = 0
+
+    def mock_try_stream(stream, label):
+        nonlocal call_count
+        call_count += 1
+        return False
+
+    with patch.object(processor, "_try_stream", side_effect=mock_try_stream):
+        episode = {
+            "id": 1,
+            "seasonNumber": 1,
+            "episodeNumber": 1,
+            "title": "Pilot",
+            "series": {"title": "Breaking Bad", "imdbId": "tt0959621"},
+        }
+        result = processor._process_episode(episode)
+
+    assert result is False
+    assert call_count == 3
