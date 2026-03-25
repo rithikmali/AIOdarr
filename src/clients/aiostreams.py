@@ -80,25 +80,33 @@ class AIOStreamsClient:
             return []
 
     def _filter_streams(self, streams: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        """Filter streams for cached Real-Debrid results."""
+        """Filter streams for playable results.
+
+        AIOStreams v2+ changed the stream format: the ``name`` field now contains
+        the resolution and source (e.g. ``"2160p BluRay REMUX"``) and cached-debrid
+        indicators (⚡, RD+, [RD]) are no longer present.  All streams returned by a
+        personal AIOStreams instance are already cached on Real-Debrid, so we accept
+        every stream that has a playback URL.
+        """
         cached_streams = []
         for stream in streams:
-            # AIOStreams uses 'name' field, fallback to 'title'
+            url = stream.get("url")
+            if not url:
+                continue
+
+            # name = resolution/source label, description = HDR tags, size, group, filename
             title = stream.get("name") or stream.get("title", "")
             description = stream.get("description", "")
-
-            # Check for cached indicators (⚡ or RD in title/name)
-            if not ("⚡" in title or "RD+" in title or "[RD]" in title):
-                continue
 
             behavior_hints = stream.get("behaviorHints", {})
             cached_streams.append(
                 {
                     "title": title,
-                    "url": stream.get("url"),
+                    "url": url,
                     "infoHash": stream.get("infoHash"),
                     "filename": behavior_hints.get("filename", ""),
-                    "quality": self._parse_quality(description or title),
+                    # Quality is encoded in the name field now (e.g. "2160p BluRay REMUX")
+                    "quality": self._parse_quality(title or description),
                 }
             )
 
