@@ -335,10 +335,12 @@ class MediaProcessor:
         import requests
 
         try:
-            logger.info(f"Triggering AIOStreams download via GET request to: {url[:100]}...")
-            # Use GET with stream=True to trigger the download without downloading content
-            response = requests.get(url, timeout=30, allow_redirects=True, stream=True)
-            response.close()
+            logger.info(f"Triggering AIOStreams download via HEAD request to: {url[:100]}...")
+            response = requests.head(url, timeout=30, allow_redirects=True)
+            if response.status_code == 405:
+                logger.info(f"HEAD not allowed, falling back to GET for: {url[:100]}...")
+                response = requests.get(url, timeout=30, allow_redirects=True, stream=True)
+                response.close()
             response.raise_for_status()
             logger.info(f"Successfully triggered download for {title}")
             return True
