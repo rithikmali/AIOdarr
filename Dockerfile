@@ -1,5 +1,8 @@
 FROM python:3.13-slim
 
+# Install curl (needed for AIOStreams playback trigger - Cloudflare-compatible TLS)
+RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
+
 # Set working directory
 WORKDIR /app
 
