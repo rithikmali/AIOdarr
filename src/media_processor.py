@@ -336,10 +336,14 @@ class MediaProcessor:
 
         try:
             logger.info(f"Triggering AIOStreams download via HEAD request to: {url[:100]}...")
-            response = requests.head(url, timeout=30, allow_redirects=True)
+            headers = {
+                "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                "Accept": "*/*",
+            }
+            response = requests.head(url, timeout=30, allow_redirects=True, headers=headers)
             if response.status_code == 405:
                 logger.info(f"HEAD not allowed, falling back to GET for: {url[:100]}...")
-                response = requests.get(url, timeout=30, allow_redirects=True, stream=True)
+                response = requests.get(url, timeout=30, allow_redirects=True, stream=True, headers=headers)
                 response.close()
             response.raise_for_status()
             logger.info(f"Successfully triggered download for {title}")
