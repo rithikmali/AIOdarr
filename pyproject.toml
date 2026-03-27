@@ -5,7 +5,6 @@ description = "Bridge between AIOStreams and Radarr for automated Real-Debrid do
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
-    "httpx>=0.27.0",
     "requests>=2.31.0",
     "schedule>=1.2.0",
     "python-dotenv>=1.0.0",

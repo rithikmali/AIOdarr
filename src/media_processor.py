@@ -332,21 +332,35 @@ class MediaProcessor:
         Returns:
             True if successfully triggered, False otherwise
         """
-        import httpx
+        import subprocess
 
         try:
-            logger.info(f"Triggering AIOStreams download via HEAD request to: {url[:100]}...")
-            headers = {
-                "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                "Accept": "*/*",
-            }
-            with httpx.Client(timeout=30, follow_redirects=True, verify=False) as client:
-                response = client.head(url, headers=headers)
-                if response.status_code == 405:
-                    logger.info(f"HEAD not allowed, falling back to GET for: {url[:100]}...")
-                    response = client.get(url, headers=headers, stream=True)
-                    response.close()
-                response.raise_for_status()
+            logger.info(f"Triggering AIOStreams download via curl to: {url[:100]}...")
+            result = subprocess.run(
+                [
+                    "curl",
+                    "-s",
+                    "-o",
+                    "/dev/null",
+                    "-w",
+                    "%{http_code}",
+                    "-L",
+                    "--max-time",
+                    "30",
+                    "-A",
+                    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                    "-H",
+                    "Accept: */*",
+                    url,
+                ],
+                capture_output=True,
+                text=True,
+                timeout=35,
+            )
+            status = int(result.stdout.strip())
+            if status >= 400:
+                logger.error(f"AIOStreams download trigger failed with HTTP {status}: {url[:100]}...")
+                return False
             logger.info(f"Successfully triggered download for {title}")
             return True
         except Exception as e:
