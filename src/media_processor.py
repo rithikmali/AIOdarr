@@ -348,23 +348,30 @@ class MediaProcessor:
             logger.warning("RD API error during verification, assuming HEAD trigger succeeded")
             return True
 
+        # Find the matching torrent by filename, then fetch its full info to check original_filename
         logger.debug(f"Checking {len(torrents)} RD torrents for match against: {clean_filename}")
         filename_lower = clean_filename.lower()
         for torrent in torrents:
             torrent_filename = torrent.get("filename", "")
             torrent_filename_lower = torrent_filename.lower()
             if filename_lower in torrent_filename_lower or torrent_filename_lower in filename_lower:
-                # Check if the RD torrent's original folder name is excluded
-                if self._is_excluded_stream({"filename": torrent_filename, "title": torrent_filename}):
+                torrent_id = torrent.get("id")
+                # Fetch full info to get original_filename (not available in list endpoint)
+                torrent_info = self.rd_client.get_torrent_info(torrent_id) if torrent_id else None
+                original_filename = torrent_info.get("original_filename", "") if torrent_info else ""
+                logger.debug(f"RD torrent '{torrent_filename}' | original_filename: '{original_filename}'")
+
+                # Check both the display filename and the original torrent folder name
+                check_name = original_filename or torrent_filename
+                if self._is_excluded_stream({"filename": check_name, "title": check_name}):
                     logger.warning(
-                        f"Excluded RD torrent found: '{torrent_filename}' "
-                        f"(matched exclusion pattern) — deleting from RD"
+                        f"Excluded RD torrent found: original='{original_filename}' "
+                        f"display='{torrent_filename}' — deleting from RD"
                     )
-                    torrent_id = torrent.get("id")
                     if torrent_id:
                         self.rd_client.delete_torrent(torrent_id)
                     return False
-                logger.info(f"Verified in Real-Debrid: {torrent_filename}")
+                logger.info(f"Verified in Real-Debrid: {torrent_filename} (original: {original_filename or 'same'})")
                 return True
 
         logger.warning(
