@@ -34,7 +34,7 @@ class Config:
 
         # Comma-separated regex patterns for stream filenames/titles to exclude
         # Default blocks common spam prefixes like "www.UIndex.org"
-        excluded_raw = os.getenv("EXCLUDED_STREAM_PATTERNS", r"(?i)^www\.")
+        excluded_raw = os.getenv("EXCLUDED_STREAM_PATTERNS", r"(?i)^www\.uindex")
         self.excluded_stream_patterns: list[str] = [
             p.strip() for p in excluded_raw.split(",") if p.strip()
         ]
