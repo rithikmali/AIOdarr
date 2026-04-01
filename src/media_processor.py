@@ -1,4 +1,5 @@
 import logging
+import re
 import time
 from typing import Any
 
@@ -144,6 +145,9 @@ class MediaProcessor:
 
         for i, stream in enumerate(streams[:attempts]):
             logger.info(f"Attempt {i + 1}/{attempts}: {stream['title']}")
+            if self._is_excluded_stream(stream):
+                logger.info(f"Skipping excluded stream: {stream.get('filename') or stream.get('title')}")
+                continue
             if self._try_stream(stream, f"{title} ({year})"):
                 logger.info(f"✓ Successfully triggered {title} via AIOStreams")
                 if self.radarr and self.radarr.unmonitor_movie(movie_id):
@@ -240,6 +244,9 @@ class MediaProcessor:
 
         for i, stream in enumerate(streams[:attempts]):
             logger.info(f"Attempt {i + 1}/{attempts}: {stream['title']}")
+            if self._is_excluded_stream(stream):
+                logger.info(f"Skipping excluded stream: {stream.get('filename') or stream.get('title')}")
+                continue
             if self._try_stream(stream, episode_label):
                 logger.info(f"✓ Successfully triggered {episode_label} via AIOStreams")
                 if self.sonarr and self.sonarr.unmonitor_episode(episode_id):
@@ -274,6 +281,23 @@ class MediaProcessor:
                     "episode": episode_number,
                 },
             )
+        return False
+
+    def _is_excluded_stream(self, stream: dict[str, Any]) -> bool:
+        """Return True if the stream matches any configured exclusion pattern."""
+        if not self.config.excluded_stream_patterns:
+            return False
+        candidates = [
+            stream.get("filename", ""),
+            stream.get("title", ""),
+        ]
+        for pattern in self.config.excluded_stream_patterns:
+            try:
+                compiled = re.compile(pattern)
+                if any(compiled.search(c) for c in candidates if c):
+                    return True
+            except re.error as e:
+                logger.warning(f"Invalid exclusion pattern '{pattern}': {e}")
         return False
 
     def _try_stream(self, stream: dict[str, Any], label: str) -> bool:
