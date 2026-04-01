@@ -96,6 +96,29 @@ class RealDebridClient:
             logger.error(f"Error checking torrent status: {e}")
             return None
 
+    def delete_torrent(self, torrent_id: str) -> bool:
+        """
+        Delete a torrent from Real-Debrid
+
+        Args:
+            torrent_id: Real-Debrid torrent ID
+
+        Returns:
+            True if successfully deleted, False otherwise
+        """
+        try:
+            response = requests.delete(
+                f"{self.base_url}/torrents/delete/{torrent_id}",
+                headers=self.headers,
+                timeout=30,
+            )
+            response.raise_for_status()
+            logger.info(f"Deleted torrent {torrent_id} from Real-Debrid")
+            return True
+        except Exception as e:
+            logger.error(f"Error deleting torrent {torrent_id}: {e}")
+            return False
+
     def list_torrents(self) -> list[dict] | None:
         """
         List all torrents in Real-Debrid account

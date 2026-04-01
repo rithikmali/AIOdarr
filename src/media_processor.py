@@ -1,4 +1,5 @@
 import logging
+import re
 import time
 from typing import Any
 
@@ -142,8 +143,15 @@ class MediaProcessor:
         attempts = min(self.config.max_retry_attempts, len(streams))
         logger.info(f"Found {len(streams)} cached streams, will try up to {attempts}")
 
-        for i, stream in enumerate(streams[:attempts]):
-            logger.info(f"Attempt {i + 1}/{attempts}: {stream['title']}")
+        attempt = 0
+        for stream in streams:
+            if attempt >= attempts:
+                break
+            logger.info(f"Attempt {attempt + 1}/{attempts}: {stream['title']}")
+            if self._is_excluded_stream(stream):
+                logger.info(f"Skipping excluded stream (not counting as attempt): {stream.get('filename') or stream.get('title')}")
+                continue
+            attempt += 1
             if self._try_stream(stream, f"{title} ({year})"):
                 logger.info(f"✓ Successfully triggered {title} via AIOStreams")
                 if self.radarr and self.radarr.unmonitor_movie(movie_id):
@@ -238,8 +246,15 @@ class MediaProcessor:
         attempts = min(self.config.max_retry_attempts, len(streams))
         logger.info(f"Found {len(streams)} cached streams, will try up to {attempts}")
 
-        for i, stream in enumerate(streams[:attempts]):
-            logger.info(f"Attempt {i + 1}/{attempts}: {stream['title']}")
+        attempt = 0
+        for stream in streams:
+            if attempt >= attempts:
+                break
+            logger.info(f"Attempt {attempt + 1}/{attempts}: {stream['title']}")
+            if self._is_excluded_stream(stream):
+                logger.info(f"Skipping excluded stream (not counting as attempt): {stream.get('filename') or stream.get('title')}")
+                continue
+            attempt += 1
             if self._try_stream(stream, episode_label):
                 logger.info(f"✓ Successfully triggered {episode_label} via AIOStreams")
                 if self.sonarr and self.sonarr.unmonitor_episode(episode_id):
@@ -274,6 +289,23 @@ class MediaProcessor:
                     "episode": episode_number,
                 },
             )
+        return False
+
+    def _is_excluded_stream(self, stream: dict[str, Any]) -> bool:
+        """Return True if the stream matches any configured exclusion pattern."""
+        if not self.config.excluded_stream_patterns:
+            return False
+        candidates = [
+            stream.get("filename", ""),
+            stream.get("title", ""),
+        ]
+        for pattern in self.config.excluded_stream_patterns:
+            try:
+                compiled = re.compile(pattern)
+                if any(compiled.search(c) for c in candidates if c):
+                    return True
+            except re.error as e:
+                logger.warning(f"Invalid exclusion pattern '{pattern}': {e}")
         return False
 
     def _try_stream(self, stream: dict[str, Any], label: str) -> bool:
@@ -313,9 +345,17 @@ class MediaProcessor:
 
         filename_lower = filename.lower()
         for torrent in torrents:
-            torrent_filename = torrent.get("filename", "").lower()
-            if filename_lower in torrent_filename or torrent_filename in filename_lower:
-                logger.info(f"Verified in Real-Debrid: {torrent.get('filename')}")
+            torrent_filename = torrent.get("filename", "")
+            torrent_filename_lower = torrent_filename.lower()
+            if filename_lower in torrent_filename_lower or torrent_filename_lower in filename_lower:
+                # Check if the RD torrent's original folder name is excluded
+                if self._is_excluded_stream({"filename": torrent_filename, "title": torrent_filename}):
+                    logger.warning(f"Excluded RD torrent found: {torrent_filename} — deleting from RD")
+                    torrent_id = torrent.get("id")
+                    if torrent_id:
+                        self.rd_client.delete_torrent(torrent_id)
+                    return False
+                logger.info(f"Verified in Real-Debrid: {torrent_filename}")
                 return True
 
         logger.warning(f"Not found in Real-Debrid after trigger: {filename}")
