@@ -96,6 +96,28 @@ class RealDebridClient:
             logger.error(f"Error checking torrent status: {e}")
             return None
 
+    def get_torrent_info(self, torrent_id: str) -> dict | None:
+        """
+        Get full torrent info including original_filename
+
+        Args:
+            torrent_id: Real-Debrid torrent ID
+
+        Returns:
+            Torrent info dict or None on error
+        """
+        try:
+            response = requests.get(
+                f"{self.base_url}/torrents/info/{torrent_id}",
+                headers=self.headers,
+                timeout=30,
+            )
+            response.raise_for_status()
+            return response.json()
+        except Exception as e:
+            logger.error(f"Error getting torrent info for {torrent_id}: {e}")
+            return None
+
     def delete_torrent(self, torrent_id: str) -> bool:
         """
         Delete a torrent from Real-Debrid
