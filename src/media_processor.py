@@ -295,15 +295,15 @@ class MediaProcessor:
         """Return True if the stream matches any configured exclusion pattern."""
         if not self.config.excluded_stream_patterns:
             return False
-        candidates = [
-            stream.get("filename", ""),
-            stream.get("title", ""),
-        ]
+        candidates = [c for c in [stream.get("filename", ""), stream.get("title", "")] if c]
+        logger.debug(f"Checking exclusion patterns {self.config.excluded_stream_patterns} against: {candidates}")
         for pattern in self.config.excluded_stream_patterns:
             try:
                 compiled = re.compile(pattern)
-                if any(compiled.search(c) for c in candidates if c):
-                    return True
+                for candidate in candidates:
+                    if compiled.search(candidate):
+                        logger.debug(f"Exclusion pattern '{pattern}' matched: '{candidate}'")
+                        return True
             except re.error as e:
                 logger.warning(f"Invalid exclusion pattern '{pattern}': {e}")
         return False
@@ -335,7 +335,12 @@ class MediaProcessor:
             logger.debug("No filename for RD verification, assuming success")
             return True
 
-        logger.info(f"Waiting 15s then verifying in Real-Debrid for: {filename}")
+        # Strip [Cloud] prefix added by AIOStreams for library items — RD stores the bare filename
+        clean_filename = re.sub(r"^\[Cloud\]\s*", "", filename, flags=re.IGNORECASE)
+        if clean_filename != filename:
+            logger.info(f"Stripped [Cloud] prefix: '{filename}' -> '{clean_filename}'")
+
+        logger.info(f"Waiting 15s then verifying in Real-Debrid for: {clean_filename}")
         time.sleep(15)
 
         torrents = self.rd_client.list_torrents()
@@ -343,14 +348,18 @@ class MediaProcessor:
             logger.warning("RD API error during verification, assuming HEAD trigger succeeded")
             return True
 
-        filename_lower = filename.lower()
+        logger.debug(f"Checking {len(torrents)} RD torrents for match against: {clean_filename}")
+        filename_lower = clean_filename.lower()
         for torrent in torrents:
             torrent_filename = torrent.get("filename", "")
             torrent_filename_lower = torrent_filename.lower()
             if filename_lower in torrent_filename_lower or torrent_filename_lower in filename_lower:
                 # Check if the RD torrent's original folder name is excluded
                 if self._is_excluded_stream({"filename": torrent_filename, "title": torrent_filename}):
-                    logger.warning(f"Excluded RD torrent found: {torrent_filename} — deleting from RD")
+                    logger.warning(
+                        f"Excluded RD torrent found: '{torrent_filename}' "
+                        f"(matched exclusion pattern) — deleting from RD"
+                    )
                     torrent_id = torrent.get("id")
                     if torrent_id:
                         self.rd_client.delete_torrent(torrent_id)
@@ -358,7 +367,11 @@ class MediaProcessor:
                 logger.info(f"Verified in Real-Debrid: {torrent_filename}")
                 return True
 
-        logger.warning(f"Not found in Real-Debrid after trigger: {filename}")
+        logger.warning(
+            f"Not found in Real-Debrid after trigger: {clean_filename}\n"
+            f"  RD has {len(torrents)} torrents. First 5 filenames:\n"
+            + "\n".join(f"    - {t.get('filename', '')}" for t in torrents[:5])
+        )
         return False
 
     def _trigger_aiostreams_download(self, url: str, title: str) -> bool:
