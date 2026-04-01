@@ -337,9 +337,14 @@ class MediaProcessor:
 
         filename_lower = filename.lower()
         for torrent in torrents:
-            torrent_filename = torrent.get("filename", "").lower()
-            if filename_lower in torrent_filename or torrent_filename in filename_lower:
-                logger.info(f"Verified in Real-Debrid: {torrent.get('filename')}")
+            torrent_filename = torrent.get("filename", "")
+            torrent_filename_lower = torrent_filename.lower()
+            if filename_lower in torrent_filename_lower or torrent_filename_lower in filename_lower:
+                # Check if the RD torrent's original folder name is excluded
+                if self._is_excluded_stream({"filename": torrent_filename, "title": torrent_filename}):
+                    logger.info(f"Skipping excluded RD torrent: {torrent_filename}")
+                    return False
+                logger.info(f"Verified in Real-Debrid: {torrent_filename}")
                 return True
 
         logger.warning(f"Not found in Real-Debrid after trigger: {filename}")
