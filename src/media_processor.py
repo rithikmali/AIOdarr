@@ -348,21 +348,29 @@ class MediaProcessor:
             logger.warning("RD API error during verification, assuming HEAD trigger succeeded")
             return True
 
+        # First pass: delete any excluded torrents found in the full list (regardless of filename match).
+        # This catches cases where the excluded torrent was added alongside a clean one for the same content.
+        logger.debug(f"Scanning {len(torrents)} RD torrents for excluded patterns")
+        for torrent in torrents:
+            torrent_filename = torrent.get("filename", "")
+            if self._is_excluded_stream({"filename": torrent_filename, "title": torrent_filename}):
+                logger.warning(
+                    f"Excluded RD torrent found during scan: '{torrent_filename}' — deleting from RD"
+                )
+                torrent_id = torrent.get("id")
+                if torrent_id:
+                    self.rd_client.delete_torrent(torrent_id)
+
+        # Second pass: find the matching torrent for this stream
         logger.debug(f"Checking {len(torrents)} RD torrents for match against: {clean_filename}")
         filename_lower = clean_filename.lower()
         for torrent in torrents:
             torrent_filename = torrent.get("filename", "")
             torrent_filename_lower = torrent_filename.lower()
             if filename_lower in torrent_filename_lower or torrent_filename_lower in filename_lower:
-                # Check if the RD torrent's original folder name is excluded
+                # Skip if this matched torrent was itself excluded (already deleted above)
                 if self._is_excluded_stream({"filename": torrent_filename, "title": torrent_filename}):
-                    logger.warning(
-                        f"Excluded RD torrent found: '{torrent_filename}' "
-                        f"(matched exclusion pattern) — deleting from RD"
-                    )
-                    torrent_id = torrent.get("id")
-                    if torrent_id:
-                        self.rd_client.delete_torrent(torrent_id)
+                    logger.warning(f"Matched torrent was excluded, treating as failed: '{torrent_filename}'")
                     return False
                 logger.info(f"Verified in Real-Debrid: {torrent_filename}")
                 return True
