@@ -151,8 +151,12 @@ class MediaProcessor:
             if self._is_excluded_stream(stream):
                 logger.info(f"Skipping excluded stream (not counting as attempt): {stream.get('filename') or stream.get('title')}")
                 continue
+            result = self._try_stream(stream, f"{title} ({year})")
+            if result is None:
+                logger.info("Stream was excluded at RD stage — not counting as attempt")
+                continue
             attempt += 1
-            if self._try_stream(stream, f"{title} ({year})"):
+            if result:
                 logger.info(f"✓ Successfully triggered {title} via AIOStreams")
                 if self.radarr and self.radarr.unmonitor_movie(movie_id):
                     logger.info(f"Unmonitored {title} in Radarr")
@@ -254,8 +258,12 @@ class MediaProcessor:
             if self._is_excluded_stream(stream):
                 logger.info(f"Skipping excluded stream (not counting as attempt): {stream.get('filename') or stream.get('title')}")
                 continue
+            result = self._try_stream(stream, episode_label)
+            if result is None:
+                logger.info("Stream was excluded at RD stage — not counting as attempt")
+                continue
             attempt += 1
-            if self._try_stream(stream, episode_label):
+            if result:
                 logger.info(f"✓ Successfully triggered {episode_label} via AIOStreams")
                 if self.sonarr and self.sonarr.unmonitor_episode(episode_id):
                     logger.info(f"Unmonitored {episode_label} in Sonarr")
@@ -308,7 +316,7 @@ class MediaProcessor:
                 logger.warning(f"Invalid exclusion pattern '{pattern}': {e}")
         return False
 
-    def _try_stream(self, stream: dict[str, Any], label: str) -> bool:
+    def _try_stream(self, stream: dict[str, Any], label: str) -> bool | None:
         """
         Trigger a single stream and verify it was added to Real-Debrid.
 
@@ -317,7 +325,9 @@ class MediaProcessor:
             label: Human-readable label for logging
 
         Returns:
-            True if stream was successfully triggered and verified, False otherwise
+            True if stream was successfully triggered and verified,
+            False if it genuinely failed,
+            None if it was excluded (should not count as an attempt)
         """
         url = stream.get("url")
         if not url:
@@ -366,11 +376,11 @@ class MediaProcessor:
                 if self._is_excluded_stream({"filename": check_name, "title": check_name}):
                     logger.warning(
                         f"Excluded RD torrent found: original='{original_filename}' "
-                        f"display='{torrent_filename}' — deleting from RD"
+                        f"display='{torrent_filename}' — deleting from RD (not counting as attempt)"
                     )
                     if torrent_id:
                         self.rd_client.delete_torrent(torrent_id)
-                    return False
+                    return None
                 logger.info(f"Verified in Real-Debrid: {torrent_filename} (original: {original_filename or 'same'})")
                 return True
 
