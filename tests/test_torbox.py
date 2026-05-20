@@ -42,3 +42,12 @@ def test_delete_torrent_returns_true_on_success(mock_post):
     result = client.delete_torrent(123)
 
     assert result is True
+    mock_post.assert_called_once_with(
+        "https://api.torbox.app/v1/api/torrents/controltorrent",
+        headers={
+            "Authorization": "Bearer test_api_key",
+            "Content-Type": "application/json",
+        },
+        json={"torrent_id": 123, "operation": "delete"},
+        timeout=30,
+    )
