@@ -1,7 +1,7 @@
 [project]
 name = "aiodarr"
 version = "1.0.0"
-description = "Bridge between AIOStreams and Radarr for automated Real-Debrid downloads"
+description = "Bridge between AIOStreams and Radarr for automated TorBox downloads"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [

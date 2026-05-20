@@ -83,10 +83,10 @@ class AIOStreamsClient:
         """Filter streams for playable results.
 
         AIOStreams v2+ changed the stream format: the ``name`` field now contains
-        the resolution and source (e.g. ``"2160p BluRay REMUX"``) and cached-debrid
-        indicators (⚡, RD+, [RD]) are no longer present.  All streams returned by a
-        personal AIOStreams instance are already cached on Real-Debrid, so we accept
-        every stream that has a playback URL.
+        the resolution and source (e.g. ``"2160p BluRay REMUX"``) and older cached-debrid
+        indicators are no longer present. All streams returned by a personal
+        AIOStreams instance are already cached on the configured debrid provider,
+        so we accept every stream that has a playback URL.
         """
         cached_streams = []
         for stream in streams:

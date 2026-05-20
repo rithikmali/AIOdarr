@@ -5,8 +5,8 @@ from typing import Any
 
 from src.clients.aiostreams import AIOStreamsClient
 from src.clients.radarr import RadarrClient
-from src.clients.realdebrid import RealDebridClient
 from src.clients.sonarr import SonarrClient
+from src.clients.torbox import TorBoxClient
 from src.config import Config
 from src.notifiers.discord import DiscordNotifier
 from src.storage import ProcessedMoviesStorage
@@ -39,11 +39,11 @@ class MediaProcessor:
             self.notifier = DiscordNotifier(config.discord_webhook_url)
             logger.info("Discord notifier initialized")
 
-        # Initialize Real-Debrid client for stream verification if configured
-        self.rd_client: RealDebridClient | None = None
-        if config.realdebrid_api_key:
-            self.rd_client = RealDebridClient(config.realdebrid_api_key)
-            logger.info("Real-Debrid client initialized for stream verification")
+        # Initialize TorBox client for stream verification if configured
+        self.torbox_client: TorBoxClient | None = None
+        if config.torbox_api_key:
+            self.torbox_client = TorBoxClient(config.torbox_api_key)
+            logger.info("TorBox client initialized for stream verification")
 
     def process_all(self) -> None:
         """Process both movies and TV shows"""
@@ -149,11 +149,15 @@ class MediaProcessor:
                 break
             logger.info(f"Attempt {attempt + 1}/{attempts}: {stream['title']}")
             if self._is_excluded_stream(stream):
-                logger.info(f"Skipping excluded stream (not counting as attempt): {stream.get('filename') or stream.get('title')}")
+                skipped_name = stream.get("filename") or stream.get("title")
+                logger.info(
+                    "Skipping excluded stream (not counting as attempt): %s",
+                    skipped_name,
+                )
                 continue
             result = self._try_stream(stream, f"{title} ({year})")
             if result is None:
-                logger.info("Stream was excluded at RD stage — not counting as attempt")
+                logger.info("Stream was excluded at TorBox stage, not counting as attempt")
                 continue
             attempt += 1
             if result:
@@ -256,11 +260,15 @@ class MediaProcessor:
                 break
             logger.info(f"Attempt {attempt + 1}/{attempts}: {stream['title']}")
             if self._is_excluded_stream(stream):
-                logger.info(f"Skipping excluded stream (not counting as attempt): {stream.get('filename') or stream.get('title')}")
+                skipped_name = stream.get("filename") or stream.get("title")
+                logger.info(
+                    "Skipping excluded stream (not counting as attempt): %s",
+                    skipped_name,
+                )
                 continue
             result = self._try_stream(stream, episode_label)
             if result is None:
-                logger.info("Stream was excluded at RD stage — not counting as attempt")
+                logger.info("Stream was excluded at TorBox stage, not counting as attempt")
                 continue
             attempt += 1
             if result:
@@ -304,7 +312,11 @@ class MediaProcessor:
         if not self.config.excluded_stream_patterns:
             return False
         candidates = [c for c in [stream.get("filename", ""), stream.get("title", "")] if c]
-        logger.debug(f"Checking exclusion patterns {self.config.excluded_stream_patterns} against: {candidates}")
+        logger.debug(
+            "Checking exclusion patterns %s against: %s",
+            self.config.excluded_stream_patterns,
+            candidates,
+        )
         for pattern in self.config.excluded_stream_patterns:
             try:
                 compiled = re.compile(pattern)
@@ -318,7 +330,7 @@ class MediaProcessor:
 
     def _try_stream(self, stream: dict[str, Any], label: str) -> bool | None:
         """
-        Trigger a single stream and verify it was added to Real-Debrid.
+        Trigger a single stream and verify it was added to TorBox.
 
         Args:
             stream: Stream dict with 'url', 'filename', 'title' keys
@@ -337,63 +349,63 @@ class MediaProcessor:
         if not self._trigger_aiostreams_download(url, label):
             return False
 
-        if not self.rd_client:
+        if not self.torbox_client:
             return True
 
         filename = stream.get("filename", "")
         if not filename:
-            logger.debug("No filename for RD verification, assuming success")
+            logger.debug("No filename for TorBox verification, assuming success")
             return True
 
-        # Strip [Cloud] prefix added by AIOStreams for library items — RD stores the bare filename
         clean_filename = re.sub(r"^\[Cloud\]\s*", "", filename, flags=re.IGNORECASE)
         if clean_filename != filename:
             logger.info(f"Stripped [Cloud] prefix: '{filename}' -> '{clean_filename}'")
 
-        logger.info(f"Waiting 15s then verifying in Real-Debrid for: {clean_filename}")
+        logger.info(f"Waiting 15s then verifying in TorBox for: {clean_filename}")
         time.sleep(15)
 
-        torrents = self.rd_client.list_torrents()
+        torrents = self.torbox_client.list_torrents()
         if torrents is None:
-            logger.warning("RD API error during verification, assuming HEAD trigger succeeded")
+            logger.warning("TorBox API error during verification, assuming trigger succeeded")
             return True
 
-        # Find the matching torrent by filename, then fetch its full info to check original_filename
-        logger.debug(f"Checking {len(torrents)} RD torrents for match against: {clean_filename}")
+        logger.debug(
+            "Checking %s TorBox torrents for match against: %s",
+            len(torrents),
+            clean_filename,
+        )
         filename_lower = clean_filename.lower()
         for torrent in torrents:
-            torrent_filename = torrent.get("filename", "")
+            torrent_filename = torrent.get("name", "")
             torrent_filename_lower = torrent_filename.lower()
             if filename_lower in torrent_filename_lower or torrent_filename_lower in filename_lower:
                 torrent_id = torrent.get("id")
-                # Fetch full info to get original_filename (not available in list endpoint)
-                torrent_info = self.rd_client.get_torrent_info(torrent_id) if torrent_id else None
-                original_filename = torrent_info.get("original_filename", "") if torrent_info else ""
-                logger.debug(f"RD torrent '{torrent_filename}' | original_filename: '{original_filename}'")
+                logger.debug(f"TorBox torrent '{torrent_filename}'")
 
-                # Check both the display filename and the original torrent folder name
-                check_name = original_filename or torrent_filename
-                if self._is_excluded_stream({"filename": check_name, "title": check_name}):
+                if self._is_excluded_stream(
+                    {"filename": torrent_filename, "title": torrent_filename}
+                ):
                     logger.warning(
-                        f"Excluded RD torrent found: original='{original_filename}' "
-                        f"display='{torrent_filename}' — deleting from RD (not counting as attempt)"
+                        "Excluded TorBox torrent found: '%s', deleting from TorBox "
+                        "(not counting as attempt)",
+                        torrent_filename,
                     )
                     if torrent_id:
-                        self.rd_client.delete_torrent(torrent_id)
+                        self.torbox_client.delete_torrent(torrent_id)
                     return None
-                logger.info(f"Verified in Real-Debrid: {torrent_filename} (original: {original_filename or 'same'})")
+                logger.info(f"Verified in TorBox: {torrent_filename}")
                 return True
 
         logger.warning(
-            f"Not found in Real-Debrid after trigger: {clean_filename}\n"
-            f"  RD has {len(torrents)} torrents. First 5 filenames:\n"
-            + "\n".join(f"    - {t.get('filename', '')}" for t in torrents[:5])
+            f"Not found in TorBox after trigger: {clean_filename}\n"
+            f"  TorBox has {len(torrents)} torrents. First 5 names:\n"
+            + "\n".join(f"    - {t.get('name', '')}" for t in torrents[:5])
         )
         return False
 
     def _trigger_aiostreams_download(self, url: str, title: str) -> bool:
         """
-        Trigger AIOStreams to add torrent to Real-Debrid by streaming the URL
+        Trigger AIOStreams to add torrent to the configured debrid provider by streaming the URL
 
         Args:
             url: AIOStreams playback URL
@@ -418,7 +430,10 @@ class MediaProcessor:
                     "--max-time",
                     "30",
                     "-A",
-                    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                    (
+                        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+                        "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                    ),
                     "-H",
                     "Accept: */*",
                     url,
@@ -429,7 +444,11 @@ class MediaProcessor:
             )
             status = int(result.stdout.strip())
             if status >= 400:
-                logger.error(f"AIOStreams download trigger failed with HTTP {status}: {url[:100]}...")
+                logger.error(
+                    "AIOStreams download trigger failed with HTTP %s: %s...",
+                    status,
+                    url[:100],
+                )
                 return False
             logger.info(f"Successfully triggered download for {title}")
             return True

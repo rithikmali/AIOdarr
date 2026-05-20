@@ -48,7 +48,7 @@ All notable changes to this project will be documented in this file.
 
 ### Features
 - Automatic detection of wanted movies from Radarr
-- Trigger AIOStreams to add torrents to Real-Debrid
+- Trigger AIOStreams to add torrents to TorBox
 - Unmonitor movies in Radarr after successful download
 - Retry logic for failed downloads
 - Statistics tracking
@@ -57,5 +57,5 @@ All notable changes to this project will be documented in this file.
 - Published to GitHub Container Registry
 
 ### Removed
-- Direct Real-Debrid API integration (uses AIOStreams instead)
-- Real-Debrid API key requirement (encoded in AIOStreams manifest)
+- Direct TorBox API integration (uses AIOStreams instead)
+- TorBox API key requirement (encoded in AIOStreams manifest)

@@ -77,25 +77,25 @@ def test_discord_webhook_url_defaults_to_empty_string(monkeypatch):
     assert config.discord_webhook_url == ""
 
 
-def test_config_realdebrid_api_key_from_env(monkeypatch):
-    """REALDEBRID_API_KEY is loaded when set"""
+def test_config_torbox_api_key_from_env(monkeypatch):
+    """TORBOX_API_KEY is loaded when set"""
     monkeypatch.setenv("AIOSTREAMS_URL", "http://aiostreams")
     monkeypatch.setenv("RADARR_URL", "http://radarr")
     monkeypatch.setenv("RADARR_API_KEY", "test-key")
-    monkeypatch.setenv("REALDEBRID_API_KEY", "rd-secret-key")
+    monkeypatch.setenv("TORBOX_API_KEY", "tb-secret-key")
 
     config = Config()
 
-    assert config.realdebrid_api_key == "rd-secret-key"
+    assert config.torbox_api_key == "tb-secret-key"
 
 
-def test_config_realdebrid_api_key_defaults_empty(monkeypatch):
-    """REALDEBRID_API_KEY defaults to empty string when not set"""
+def test_config_torbox_api_key_defaults_empty(monkeypatch):
+    """TORBOX_API_KEY defaults to empty string when not set"""
     monkeypatch.setenv("AIOSTREAMS_URL", "http://aiostreams")
     monkeypatch.setenv("RADARR_URL", "http://radarr")
     monkeypatch.setenv("RADARR_API_KEY", "test-key")
-    monkeypatch.delenv("REALDEBRID_API_KEY", raising=False)
+    monkeypatch.delenv("TORBOX_API_KEY", raising=False)
 
     config = Config()
 
-    assert config.realdebrid_api_key == ""
+    assert config.torbox_api_key == ""

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 AIODarr - AIOStreams-Radarr/Sonarr Bridge
-Automatically adds wanted movies and TV shows to Real-Debrid using AIOStreams
+Automatically adds wanted movies and TV shows to TorBox using AIOStreams
 """
 
 import logging
