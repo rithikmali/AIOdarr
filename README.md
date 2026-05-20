@@ -1,32 +1,32 @@
 # AIODarr - AIOStreams-Radarr/Sonarr Bridge
 
-Automatically adds wanted movies and TV shows from Radarr/Sonarr to Real-Debrid using AIOStreams.
+Automatically adds wanted movies and TV shows from Radarr/Sonarr to TorBox using AIOStreams.
 
 ## Overview
 
 This service bridges the gap between Radarr/Sonarr and AIOStreams, automatically:
 1. Monitors Radarr for wanted movies and/or Sonarr for wanted episodes
-2. Searches AIOStreams for cached Real-Debrid torrents
-3. Triggers AIOStreams to add the torrent to Real-Debrid
+2. Searches AIOStreams for cached TorBox torrents
+3. Triggers AIOStreams to add the torrent to TorBox
 4. Unmonitors the media in Radarr/Sonarr
 5. Zurg creates symlinks automatically
 6. Radarr/Sonarr imports the media when it detects the file
 
 ## How It Works
 
-Instead of managing Real-Debrid API calls directly, this service leverages AIOStreams' existing integration:
+Instead of managing TorBox API calls directly, this service leverages AIOStreams' existing integration:
 - Makes a HEAD request to the AIOStreams playback URL
-- AIOStreams handles adding the torrent to your Real-Debrid account
-- No need for separate Real-Debrid API keys (already encoded in your AIOStreams manifest)
+- AIOStreams handles adding the torrent to your TorBox account
+- No need for separate TorBox API keys (already encoded in your AIOStreams manifest)
 
 ## Prerequisites
 
 - **Radarr** (optional) - Movie management (v3+)
 - **Sonarr** (optional) - TV show management (v3+)
 - **At least one** of Radarr or Sonarr must be configured
-- **AIOStreams** - Configured with Real-Debrid (via Stremio manifest URL)
-- **Real-Debrid** - Debrid service account (configured in AIOStreams)
-- **Zurg + rclone** - Mounted Real-Debrid filesystem
+- **AIOStreams** - Configured with TorBox (via Stremio manifest URL)
+- **TorBox** - Debrid service account (configured in AIOStreams)
+- **Zurg + rclone** - Mounted TorBox filesystem
 - **Docker** (recommended) or **Python 3.13+** with **uv**
 
 ## Installation
@@ -211,7 +211,7 @@ sudo journalctl -u aiodarr -f
        │
        ↓
 ┌─────────────┐
-│ AIOStreams  │ ← Adds torrent to Real-Debrid automatically
+│ AIOStreams  │ ← Adds torrent to TorBox automatically
 └──────┬──────┘
        │
        ↓
@@ -247,9 +247,9 @@ sudo journalctl -u aiodarr -f
 - Test manually: `curl "${AIOSTREAMS_URL}/stream/movie/tt0133093.json"`
 - Should return JSON with cached streams marked with ⚡
 
-### Movies not being added to Real-Debrid
+### Movies not being added to TorBox
 - Check AIOStreams logs for errors
-- Verify your Real-Debrid account is properly configured in AIOStreams
+- Verify your TorBox account is properly configured in AIOStreams
 - Make sure the stream has a `url` field in the AIOStreams response
 
 ### Movies not importing to Radarr
@@ -259,7 +259,7 @@ sudo journalctl -u aiodarr -f
 - Movies are unmonitored after processing, so they won't re-download
 
 ### Service keeps retrying same movie
-- Movie might not be cached on Real-Debrid
+- Movie might not be cached on TorBox
 - Check `RETRY_FAILED_HOURS` setting (increase if needed)
 - Verify IMDB ID is correct in Radarr
 

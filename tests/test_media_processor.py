@@ -516,11 +516,11 @@ def test_process_all_no_failure_summary_without_notifier(
 def test_try_stream_returns_true_on_trigger_success_no_rd(
     mock_aiostreams, mock_radarr, mock_sonarr, monkeypatch
 ):
-    """_try_stream returns True when trigger succeeds and no RD client configured"""
+    """_try_stream returns True when trigger succeeds and no TorBox client configured"""
     monkeypatch.setenv("AIOSTREAMS_URL", "http://aiostreams")
     monkeypatch.setenv("RADARR_URL", "http://radarr")
     monkeypatch.setenv("RADARR_API_KEY", "test-key")
-    monkeypatch.delenv("REALDEBRID_API_KEY", raising=False)
+    monkeypatch.delenv("TORBOX_API_KEY", raising=False)
 
     config = Config()
     processor = MediaProcessor(config)
@@ -535,7 +535,7 @@ def test_try_stream_returns_true_on_trigger_success_no_rd(
         result = processor._try_stream(stream, "Show S01E01")
 
     assert result is True
-    assert processor.rd_client is None
+    assert processor.torbox_client is None
 
 
 @patch("src.media_processor.SonarrClient")
@@ -546,7 +546,7 @@ def test_try_stream_returns_false_on_no_url(mock_aiostreams, mock_radarr, mock_s
     monkeypatch.setenv("AIOSTREAMS_URL", "http://aiostreams")
     monkeypatch.setenv("RADARR_URL", "http://radarr")
     monkeypatch.setenv("RADARR_API_KEY", "test-key")
-    monkeypatch.delenv("REALDEBRID_API_KEY", raising=False)
+    monkeypatch.delenv("TORBOX_API_KEY", raising=False)
 
     config = Config()
     processor = MediaProcessor(config)
@@ -563,23 +563,24 @@ def test_try_stream_returns_false_on_no_url(mock_aiostreams, mock_radarr, mock_s
 @patch("src.media_processor.SonarrClient")
 @patch("src.media_processor.RadarrClient")
 @patch("src.media_processor.AIOStreamsClient")
-def test_try_stream_returns_true_when_rd_verifies_filename(
+def test_try_stream_returns_true_when_torbox_verifies_filename(
     mock_aiostreams, mock_radarr, mock_sonarr, monkeypatch
 ):
-    """_try_stream returns True when RD list_torrents contains matching filename"""
+    """_try_stream returns True when TorBox list_torrents contains matching filename"""
     monkeypatch.setenv("AIOSTREAMS_URL", "http://aiostreams")
     monkeypatch.setenv("RADARR_URL", "http://radarr")
     monkeypatch.setenv("RADARR_API_KEY", "test-key")
-    monkeypatch.setenv("REALDEBRID_API_KEY", "rd-key")
+    monkeypatch.setenv("TORBOX_API_KEY", "tb-key")
 
     config = Config()
 
-    with patch("src.media_processor.RealDebridClient") as mock_rd_class:
-        mock_rd = Mock()
-        mock_rd_class.return_value = mock_rd
-        mock_rd.list_torrents.return_value = [
+    with patch("src.media_processor.TorBoxClient") as mock_torbox_class:
+        mock_torbox = Mock()
+        mock_torbox_class.return_value = mock_torbox
+        mock_torbox.list_torrents.return_value = [
             {
-                "filename": "Shrinking S03E04 The Field 2160p ATVP WEB-DL DDP5 1 DV H 265-NTb.mkv",
+                "id": 1,
+                "name": "Shrinking S03E04 The Field 2160p ATVP WEB-DL DDP5 1 DV H 265-NTb.mkv",
                 "status": "downloaded",
             }
         ]
@@ -587,7 +588,7 @@ def test_try_stream_returns_true_when_rd_verifies_filename(
         processor = MediaProcessor(config)
 
         stream = {
-            "title": "[RD⚡️] 4K",
+            "title": "[TB⚡️] 4K",
             "url": "http://stream-url",
             "filename": "Shrinking S03E04 The Field 2160p ATVP WEB-DL DDP5 1 DV H 265-NTb.mkv",
         }
@@ -599,34 +600,34 @@ def test_try_stream_returns_true_when_rd_verifies_filename(
             result = processor._try_stream(stream, "Shrinking S03E04")
 
     assert result is True
-    mock_rd.list_torrents.assert_called_once()
+    mock_torbox.list_torrents.assert_called_once()
 
 
 @patch("src.media_processor.SonarrClient")
 @patch("src.media_processor.RadarrClient")
 @patch("src.media_processor.AIOStreamsClient")
-def test_try_stream_returns_false_when_rd_misses_filename(
+def test_try_stream_returns_false_when_torbox_misses_filename(
     mock_aiostreams, mock_radarr, mock_sonarr, monkeypatch
 ):
-    """_try_stream returns False when RD list_torrents does not contain matching filename"""
+    """_try_stream returns False when TorBox list_torrents does not contain matching filename"""
     monkeypatch.setenv("AIOSTREAMS_URL", "http://aiostreams")
     monkeypatch.setenv("RADARR_URL", "http://radarr")
     monkeypatch.setenv("RADARR_API_KEY", "test-key")
-    monkeypatch.setenv("REALDEBRID_API_KEY", "rd-key")
+    monkeypatch.setenv("TORBOX_API_KEY", "tb-key")
 
     config = Config()
 
-    with patch("src.media_processor.RealDebridClient") as mock_rd_class:
-        mock_rd = Mock()
-        mock_rd_class.return_value = mock_rd
-        mock_rd.list_torrents.return_value = [
-            {"filename": "Some.Other.Movie.mkv", "status": "downloaded"}
+    with patch("src.media_processor.TorBoxClient") as mock_torbox_class:
+        mock_torbox = Mock()
+        mock_torbox_class.return_value = mock_torbox
+        mock_torbox.list_torrents.return_value = [
+            {"id": 2, "name": "Some.Other.Movie.mkv", "status": "downloaded"}
         ]
 
         processor = MediaProcessor(config)
 
         stream = {
-            "title": "[RD⚡️] 4K",
+            "title": "[TB⚡️] 4K",
             "url": "http://stream-url",
             "filename": "Shrinking S03E04 The Field 2160p ATVP WEB-DL DDP5 1 DV H 265-NTb.mkv",
         }
@@ -643,26 +644,26 @@ def test_try_stream_returns_false_when_rd_misses_filename(
 @patch("src.media_processor.SonarrClient")
 @patch("src.media_processor.RadarrClient")
 @patch("src.media_processor.AIOStreamsClient")
-def test_try_stream_returns_true_when_rd_api_errors(
+def test_try_stream_returns_true_when_torbox_api_errors(
     mock_aiostreams, mock_radarr, mock_sonarr, monkeypatch
 ):
-    """_try_stream returns True when RD list_torrents errors (graceful degradation)"""
+    """_try_stream returns True when TorBox list_torrents errors (graceful degradation)"""
     monkeypatch.setenv("AIOSTREAMS_URL", "http://aiostreams")
     monkeypatch.setenv("RADARR_URL", "http://radarr")
     monkeypatch.setenv("RADARR_API_KEY", "test-key")
-    monkeypatch.setenv("REALDEBRID_API_KEY", "rd-key")
+    monkeypatch.setenv("TORBOX_API_KEY", "tb-key")
 
     config = Config()
 
-    with patch("src.media_processor.RealDebridClient") as mock_rd_class:
-        mock_rd = Mock()
-        mock_rd_class.return_value = mock_rd
-        mock_rd.list_torrents.return_value = None  # API error
+    with patch("src.media_processor.TorBoxClient") as mock_torbox_class:
+        mock_torbox = Mock()
+        mock_torbox_class.return_value = mock_torbox
+        mock_torbox.list_torrents.return_value = None  # API error
 
         processor = MediaProcessor(config)
 
         stream = {
-            "title": "[RD⚡️] 4K",
+            "title": "[TB⚡️] 4K",
             "url": "http://stream-url",
             "filename": "Shrinking S03E04 The Field 2160p ATVP WEB-DL DDP5 1 DV H 265-NTb.mkv",
         }
@@ -687,7 +688,7 @@ def test_process_movie_retries_and_succeeds_on_second_stream(
     monkeypatch.setenv("RADARR_URL", "http://radarr")
     monkeypatch.setenv("RADARR_API_KEY", "test-key")
     monkeypatch.delenv("DISCORD_WEBHOOK_URL", raising=False)
-    monkeypatch.delenv("REALDEBRID_API_KEY", raising=False)
+    monkeypatch.delenv("TORBOX_API_KEY", raising=False)
 
     config = Config()
 
@@ -730,7 +731,7 @@ def test_process_movie_fails_after_max_retries(
     monkeypatch.setenv("RADARR_URL", "http://radarr")
     monkeypatch.setenv("RADARR_API_KEY", "test-key")
     monkeypatch.delenv("DISCORD_WEBHOOK_URL", raising=False)
-    monkeypatch.delenv("REALDEBRID_API_KEY", raising=False)
+    monkeypatch.delenv("TORBOX_API_KEY", raising=False)
     monkeypatch.setenv("MAX_RETRY_ATTEMPTS", 3)
 
     config = Config()
@@ -770,7 +771,7 @@ def test_process_episode_retries_and_succeeds_on_second_stream(
     monkeypatch.setenv("SONARR_URL", "http://sonarr")
     monkeypatch.setenv("SONARR_API_KEY", "test-key")
     monkeypatch.delenv("DISCORD_WEBHOOK_URL", raising=False)
-    monkeypatch.delenv("REALDEBRID_API_KEY", raising=False)
+    monkeypatch.delenv("TORBOX_API_KEY", raising=False)
 
     config = Config()
 
@@ -818,7 +819,7 @@ def test_process_episode_fails_after_max_retries(
     monkeypatch.setenv("SONARR_URL", "http://sonarr")
     monkeypatch.setenv("SONARR_API_KEY", "test-key")
     monkeypatch.delenv("DISCORD_WEBHOOK_URL", raising=False)
-    monkeypatch.delenv("REALDEBRID_API_KEY", raising=False)
+    monkeypatch.delenv("TORBOX_API_KEY", raising=False)
     monkeypatch.setenv("MAX_RETRY_ATTEMPTS", 3)
 
     config = Config()
